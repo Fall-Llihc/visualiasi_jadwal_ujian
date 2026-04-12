@@ -58,7 +58,11 @@ hr { border-color:#1C2040 !important; }
     background:linear-gradient(135deg,#4F6EF7,#A78BFA);
     -webkit-background-clip:text; -webkit-text-fill-color:transparent;
 }
-.mnum-red { background:linear-gradient(135deg,#E63946,#FF6B6B) !important; }
+.mnum-red {
+    background:linear-gradient(135deg,#E63946,#FF6B6B) !important;
+    -webkit-background-clip:text !important;
+    -webkit-text-fill-color:transparent !important;
+}
 .mlbl { font-size:11px; color:#3D4A7A; margin-top:5px; }
 
 .sec-h {

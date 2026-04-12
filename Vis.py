@@ -1,219 +1,197 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime, time
-import re
+import html as html_lib
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Jadwal Pengawas UTS",
+    page_title="ProctorView – Jadwal Pengawas UTS",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CUSTOM CSS
+# GLOBAL CSS
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
 
-/* ── Base ── */
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.main { background: #0D0F1A; }
-[data-testid="stAppViewContainer"] { background: #0D0F1A; }
-[data-testid="stSidebar"] {
-    background: #111320 !important;
-    border-right: 1px solid #1E2235;
-}
-[data-testid="stHeader"] { background: transparent; }
+[data-testid="stAppViewContainer"] { background: #0B0D1A; }
+[data-testid="stSidebar"]          { background: #0F1120 !important; border-right: 1px solid #1C2040; }
+[data-testid="stHeader"]           { background: transparent; }
+section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
+h1,h2,h3,h4 { font-family: 'Syne', sans-serif !important; color: #E8ECF8; }
 
-/* ── Typography ── */
-h1,h2,h3 { font-family: 'Syne', sans-serif !important; }
-
-/* ── Sidebar labels ── */
-.sidebar-label {
-    font-family: 'Syne', sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #5B6A9A;
-    margin: 18px 0 6px 0;
-}
-
-/* ── Metric cards ── */
-.metric-card {
-    background: #13162A;
-    border: 1px solid #1E2235;
-    border-radius: 16px;
-    padding: 20px 22px;
-    text-align: center;
-    transition: border-color .2s;
-}
-.metric-card:hover { border-color: #4F6EF7; }
-.metric-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 2.4rem;
-    font-weight: 800;
-    line-height: 1;
-    background: linear-gradient(135deg, #4F6EF7, #A78BFA);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-.metric-label { font-size: 12px; color: #5B6A9A; margin-top: 4px; }
-
-/* ── Section header ── */
-.section-header {
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #4F6EF7;
-    border-left: 3px solid #4F6EF7;
-    padding-left: 10px;
-    margin: 28px 0 14px 0;
-}
-
-/* ── Conflict banner ── */
-.conflict-banner {
-    background: linear-gradient(135deg, #2D1010, #3D1515);
-    border: 1px solid #E63946;
-    border-radius: 14px;
-    padding: 18px 22px;
-    margin-bottom: 16px;
-}
-.conflict-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: #E63946;
-    margin-bottom: 8px;
-}
-.conflict-item { font-size: 13px; color: #FFB3B3; margin: 4px 0; }
-
-/* ── Schedule card ── */
-.sched-card {
-    background: #13162A;
-    border: 1px solid #1E2235;
-    border-left: 4px solid var(--accent, #4F6EF7);
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin-bottom: 10px;
-    transition: transform .15s, border-color .15s;
-}
-.sched-card:hover { transform: translateX(4px); border-left-color: #A78BFA; }
-.sched-mk { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: #E8ECF8; }
-.sched-meta { font-size: 12px; color: #5B6A9A; margin-top: 5px; }
-.sched-badge {
-    display: inline-block;
-    background: #1E2235;
-    color: #A78BFA;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 6px;
-}
-.conflict-dot {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: #E63946;
-    margin-right: 6px;
-    animation: pulse 1.5s infinite;
-}
-@keyframes pulse {
-    0%,100% { opacity:1; } 50% { opacity:.3; }
-}
-
-/* ── External agenda card ── */
-.ext-card {
-    background: #13162A;
-    border: 1px solid #2A3A1A;
-    border-left: 4px solid #2A9D8F;
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin-bottom: 10px;
-}
-
-/* ── Name hero ── */
-.name-hero {
-    background: linear-gradient(135deg, #13162A, #1A1E35);
-    border: 1px solid #1E2235;
-    border-radius: 20px;
-    padding: 28px 32px;
-    margin-bottom: 24px;
-}
-.name-greeting { font-size: 12px; color: #5B6A9A; letter-spacing: .12em; text-transform: uppercase; }
-.name-big {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
-    color: #E8ECF8;
-    margin: 4px 0 6px 0;
-}
-.nim-chip {
-    background: #4F6EF7;
-    color: #fff;
-    border-radius: 20px;
-    padding: 3px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    display: inline-block;
-}
-
-/* ── Inputs ── */
-[data-testid="stFileUploader"] {
-    background: #13162A;
-    border: 1.5px dashed #2A2E4A;
-    border-radius: 14px;
-    padding: 10px;
-}
 .stTextInput > div > div > input {
-    background: #13162A !important;
-    border: 1.5px solid #1E2235 !important;
-    border-radius: 10px !important;
-    color: #E8ECF8 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 14px !important;
+    background: #12152A !important; border: 1.5px solid #1C2040 !important;
+    border-radius: 10px !important; color: #E8ECF8 !important;
+    font-family: 'DM Sans', sans-serif !important; font-size: 13px !important;
 }
 .stTextInput > div > div > input:focus {
     border-color: #4F6EF7 !important;
     box-shadow: 0 0 0 3px rgba(79,110,247,.15) !important;
 }
+[data-testid="stFileUploader"] {
+    background: #12152A; border: 1.5px dashed #1C2040; border-radius: 12px;
+}
 .stButton > button {
-    background: linear-gradient(135deg, #4F6EF7, #7C5CFC) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    letter-spacing: .05em !important;
-    padding: 10px 24px !important;
-    transition: opacity .2s !important;
+    background: linear-gradient(135deg,#4F6EF7,#7C5CFC) !important;
+    color:#fff !important; border:none !important; border-radius:10px !important;
+    font-family:'Syne',sans-serif !important; font-weight:700 !important;
+    letter-spacing:.04em !important; transition:opacity .2s !important;
 }
-.stButton > button:hover { opacity: .85 !important; }
+.stButton > button:hover { opacity:.82 !important; }
 
-/* ── Time select ── */
-[data-testid="stSelectbox"] > div > div {
-    background: #13162A !important;
-    border: 1.5px solid #1E2235 !important;
-    border-radius: 10px !important;
-    color: #E8ECF8 !important;
+.slabel {
+    font-family:'Syne',sans-serif; font-size:10px; font-weight:700;
+    letter-spacing:.14em; text-transform:uppercase; color:#3D4A7A; margin:20px 0 6px;
+}
+hr { border-color:#1C2040 !important; }
+
+.mcard { background:#12152A; border:1px solid #1C2040; border-radius:14px; padding:18px 16px; text-align:center; }
+.mnum {
+    font-family:'Syne',sans-serif; font-size:2.2rem; font-weight:800; line-height:1;
+    background:linear-gradient(135deg,#4F6EF7,#A78BFA);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.mnum-red { background:linear-gradient(135deg,#E63946,#FF6B6B) !important; }
+.mlbl { font-size:11px; color:#3D4A7A; margin-top:5px; }
+
+.sec-h {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:.12em; text-transform:uppercase; color:#4F6EF7;
+    border-left:3px solid #4F6EF7; padding-left:10px; margin:28px 0 14px;
 }
 
-/* ── Divider ── */
-hr { border-color: #1E2235 !important; }
+.cbanner { background:linear-gradient(135deg,#1E0A0A,#2C0F0F); border:1px solid #E63946; border-radius:12px; padding:16px 20px; margin-bottom:12px; }
+.ctitle  { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:#E63946; margin-bottom:8px; }
+.citem   { font-size:12px; color:#FFB3B3; margin:3px 0; line-height:1.5; }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0D0F1A; }
-::-webkit-scrollbar-thumb { background: #2A2E4A; border-radius: 3px; }
+.hero { background:linear-gradient(135deg,#12152A 0%,#181D3A 100%); border:1px solid #1C2040; border-radius:18px; padding:26px 30px; margin-bottom:22px; }
+.hero-label { font-size:11px; color:#3D4A7A; letter-spacing:.12em; text-transform:uppercase; }
+.hero-name  { font-family:'Syne',sans-serif; font-size:1.9rem; font-weight:800; color:#E8ECF8; margin:4px 0 8px; }
+.nim-pill   { background:#4F6EF7; color:#fff; border-radius:20px; padding:3px 14px; font-size:11px; font-weight:700; display:inline-block; }
+.conf-pill  { background:#E63946; color:#fff; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block; margin-left:8px; }
+
+.lcard { background:#12152A; border:1px solid #1C2040; border-left:4px solid var(--ac,#4F6EF7); border-radius:11px; padding:13px 16px; margin-bottom:9px; }
+.lcard-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#E8ECF8; }
+.lcard-meta  { font-size:11px; color:#3D4A7A; margin-top:6px; }
+.badge { display:inline-block; background:#1C2040; color:#A78BFA; border-radius:5px; padding:2px 7px; font-size:10px; font-weight:600; margin-right:5px; }
+.ext-lcard { background:#0E1A18; border:1px solid #1A3530; border-left:4px solid #2A9D8F; border-radius:11px; padding:13px 16px; margin-bottom:9px; }
+
+/* ─── CALENDAR ─── */
+.cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 32px; }
+
+.cal-table {
+    border-collapse: separate;
+    border-spacing: 5px;
+    width: 100%;
+    table-layout: fixed;
+}
+
+/* corner + time column */
+.th-corner { width: 145px; background: transparent; border: none; }
+.td-time {
+    width: 145px;
+    background: transparent;
+    border: none;
+    vertical-align: middle;
+    padding: 6px 10px 6px 0;
+    text-align: right;
+}
+.td-time span {
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: #3D4A7A;
+    letter-spacing: .06em;
+    white-space: nowrap;
+}
+
+/* day header */
+.th-day {
+    background: #12152A;
+    border: 1px solid #1C2040;
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+    vertical-align: middle;
+}
+.th-day-name { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#E8ECF8; }
+.th-day-date { font-size:10px; color:#3D4A7A; margin-top:3px; }
+
+/* empty cell */
+.td-empty {
+    background: #0D0F1C;
+    border: 1px solid #141726;
+    border-radius: 10px;
+    min-height: 110px;
+}
+
+/* filled cell wrapper — no padding, contains stacked items */
+.td-fill {
+    vertical-align: top;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* individual exam card inside cell */
+.c-exam {
+    border-radius: 10px;
+    border-left: 4px solid var(--ac, #4F6EF7);
+    background: var(--bg, #0E1228);
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    padding: 10px 11px 10px 12px;
+    margin-bottom: 5px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    min-height: 110px;
+}
+.c-exam.conflict { outline: 2px solid #E63946; }
+
+.c-exam-mk   { font-family:'Syne',sans-serif; font-size:11.5px; font-weight:700; color:#E8ECF8; line-height:1.35; margin-bottom:7px; }
+.c-exam-room { font-size:10px; color:#8B9AC8; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.c-exam-kls  { font-size:9.5px; color:#5B6A9A; }
+.c-exam-type { font-size:9px; color:#3D4A7A; font-style:italic; margin-top:5px; }
+
+/* conflict badge inside card */
+.c-conf-tag {
+    position: absolute; top: 7px; right: 7px;
+    background: #E63946; color: #fff;
+    border-radius: 4px; padding: 1px 5px;
+    font-size: 8.5px; font-weight: 700; letter-spacing:.03em;
+    white-space: nowrap;
+}
+
+/* external card inside cell */
+.c-ext {
+    border-radius: 10px;
+    border: 2px dashed #2A9D8F;
+    border-left: 4px solid #2A9D8F;
+    background: #0A1714;
+    padding: 10px 11px 10px 12px;
+    margin-bottom: 5px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    min-height: 90px;
+}
+.c-ext.conflict { border-color: #E63946; }
+.c-ext-icon  { font-size: 13px; margin-bottom: 4px; }
+.c-ext-title { font-family:'Syne',sans-serif; font-size:11px; font-weight:700; color:#C8FAF0; line-height:1.35; margin-bottom:5px; }
+.c-ext-time  { font-size:10px; color:#2A9D8F; }
+
+/* legend */
+.legend-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; align-items:center; }
+.legend-dot  { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; flex-shrink:0; }
+.legend-item { font-size:11px; color:#5B6A9A; display:flex; align-items:center; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -221,9 +199,7 @@ hr { border-color: #1E2235 !important; }
 # ─────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
-
-DAY_ORDER = {'senin': 0, 'selasa': 1, 'rabu': 2, 'kamis': 3, 'jumat': 4, 'sabtu': 5, 'minggu': 6}
-DAY_EN    = {0:'Monday', 1:'Tuesday', 2:'Wednesday', 3:'Thursday', 4:'Friday', 5:'Saturday', 6:'Sunday'}
+DAY_ORDER = {'senin':0,'selasa':1,'rabu':2,'kamis':3,'jumat':4,'sabtu':5,'minggu':6}
 
 TIME_SLOTS = [
     '08.00 - 10.15 WIB',
@@ -234,7 +210,6 @@ TIME_SLOTS = [
     '18.30 - 20.30 WIB',
 ]
 
-# Slot → (start_hour, end_hour) for overlap detection
 TIME_RANGES = {
     '08.00 - 10.15 WIB': (8.00,  10.25),
     '10.45 - 13.00 WIB': (10.75, 13.00),
@@ -244,85 +219,78 @@ TIME_RANGES = {
     '18.30 - 20.30 WIB': (18.50, 20.50),
 }
 
-SLOT_COLORS = {
-    '08.00 - 10.15 WIB': '#4F6EF7',
-    '10.45 - 13.00 WIB': '#F4A261',
-    '13.00 - 15.00 WIB': '#2A9D8F',
-    '13.30 - Selesai':   '#8338EC',
-    '14.00 - 16.15 WIB': '#E9C46A',
-    '18.30 - 20.30 WIB': '#E63946',
+SLOT_STYLE = {
+    '08.00 - 10.15 WIB': ('#4F6EF7', '#0E1228'),
+    '10.45 - 13.00 WIB': ('#F4A261', '#1A1208'),
+    '13.00 - 15.00 WIB': ('#2A9D8F', '#0B1A18'),
+    '13.30 - Selesai':   ('#8338EC', '#130E20'),
+    '14.00 - 16.15 WIB': ('#E9C46A', '#1A1808'),
+    '18.30 - 20.30 WIB': ('#E63946', '#1A080A'),
 }
+DEFAULT_STYLE = ('#4F6EF7', '#0E1228')
 EXT_COLOR = '#2A9D8F'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
-
-def day_rank(d: str) -> int:
+def day_rank(d):
     d = str(d).strip().lower()
     for k, v in DAY_ORDER.items():
-        if d.startswith(k):
-            return v
+        if d.startswith(k): return v
     return 99
 
-def time_rank(t: str) -> int:
+def time_rank(t):
     t = str(t).strip()
     return TIME_SLOTS.index(t) if t in TIME_SLOTS else 99
 
-def load_csv(file) -> pd.DataFrame:
+def load_csv(file):
     df = pd.read_csv(file, sep=';', skiprows=12, header=0)
     df.columns = df.columns.str.strip()
     df = df[df['Tanggal'].notna() & (df['Tanggal'].astype(str).str.strip() != '')].copy()
     for col in ['NIM (Pengawas 1)', 'NIM (Pengawas 2)', 'NIM (Pengawas 3)']:
         df[col] = df[col].astype(str).str.strip().str.lstrip('`').str.upper()
-        df[col] = df[col].replace({'NAN': '', 'NONE': ''})
+        df[col] = df[col].replace({'NAN':'','NONE':''})
     return df
 
-def search_nim(df: pd.DataFrame, nim: str) -> pd.DataFrame:
+def search_nim(df, nim):
     nim = nim.strip().upper()
     mask = (
         (df['NIM (Pengawas 1)'] == nim) |
         (df['NIM (Pengawas 2)'] == nim) |
         (df['NIM (Pengawas 3)'] == nim)
     )
-    result = df[mask].copy()
-    result['_day']  = result['Tanggal'].apply(day_rank)
-    result['_time'] = result['Jam'].apply(time_rank)
-    return result.sort_values(['_day', '_time']).reset_index(drop=True)
+    r = df[mask].copy()
+    r['_day']  = r['Tanggal'].apply(day_rank)
+    r['_time'] = r['Jam'].apply(time_rank)
+    return r.sort_values(['_day','_time']).reset_index(drop=True)
 
-def get_name(row, nim: str) -> str:
+def get_name(row, nim):
     nim = nim.strip().upper()
-    for i in ['1', '2', '3']:
-        if str(row.get(f'NIM (Pengawas {i})', '')).strip().upper() == nim:
-            return str(row.get(f'Nama Lengkap (Pengawas {i})', '-')).strip()
+    for i in ['1','2','3']:
+        v = str(row.get(f'NIM (Pengawas {i})','') or '').strip().upper()
+        if v == nim:
+            return str(row.get(f'Nama Lengkap (Pengawas {i})','') or '-').strip()
     return '-'
 
-def parse_ext_time(t: str):
-    """Parse 'HH:MM' string to float hour."""
+def parse_ext_time(t):
     try:
         h, m = map(int, t.split(':'))
-        return h + m / 60
-    except:
-        return None
+        return h + m/60
+    except: return None
 
-def overlaps(s1, e1, s2, e2):
-    return s1 < e2 and s2 < e1
+def overlaps(s1,e1,s2,e2): return s1 < e2 and s2 < e1
 
-def detect_conflicts(schedule_rows, ext_agendas):
-    """Return list of conflict dicts."""
+def detect_conflicts(schedule_df, ext_agendas):
     conflicts = []
-    for _, srow in schedule_rows.iterrows():
+    for _, srow in schedule_df.iterrows():
         slot = str(srow['Jam']).strip()
-        if slot not in TIME_RANGES:
-            continue
+        if slot not in TIME_RANGES: continue
         ss, se = TIME_RANGES[slot]
         day = str(srow['Tanggal']).strip()
         for ea in ext_agendas:
-            if ea['day'] != day:
-                continue
-            es, ee = ea['start_h'], ea['end_h']
-            if overlaps(ss, se, es, ee):
+            if ea['day'] != day: continue
+            if overlaps(ss, se, ea['start_h'], ea['end_h']):
                 conflicts.append({
                     'day': day,
                     'exam_slot': slot,
@@ -333,156 +301,134 @@ def detect_conflicts(schedule_rows, ext_agendas):
                 })
     return conflicts
 
+def ext_to_slot(ea):
+    """Map an external agenda to the nearest TIME_SLOT by start time."""
+    best, bdiff = None, 999
+    for s, rng in TIME_RANGES.items():
+        diff = abs(rng[0] - ea['start_h'])
+        if diff < bdiff:
+            bdiff, best = diff, s
+    return best
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLOTLY CALENDAR
+# CALENDAR HTML — pure table, no Plotly
 # ─────────────────────────────────────────────────────────────────────────────
-
-def build_calendar(schedule_df: pd.DataFrame, ext_agendas: list, conflicts: list) -> go.Figure:
-    conflict_keys = set()
-    for c in conflicts:
-        conflict_keys.add((c['day'], c['exam_slot']))
+def build_calendar_html(schedule_df, ext_agendas, conflicts):
+    conflict_exam_keys = {(c['day'], c['exam_slot']) for c in conflicts}
+    conflict_ext_keys  = {(c['day'], c['ext_title'])  for c in conflicts}
 
     dates = sorted(schedule_df['Tanggal'].unique(), key=day_rank)
-    all_slots = sorted(
-        set(schedule_df['Jam'].tolist()) | {e['time_slot'] for e in ext_agendas if 'time_slot' in e},
-        key=time_rank
-    )
-    if not all_slots:
-        all_slots = TIME_SLOTS
 
-    # Map slots → y index (inverted: slot 0 at top)
-    slot_y = {s: i for i, s in enumerate(all_slots)}
-    day_x  = {d: i for i, d in enumerate(dates)}
-
-    fig = go.Figure()
-
-    # ── Draw exam session cards ──────────────────────────────────────────────
-    for _, row in schedule_df.iterrows():
-        day  = str(row['Tanggal']).strip()
-        slot = str(row['Jam']).strip()
-        if day not in day_x or slot not in slot_y:
-            continue
-        xi = day_x[day]
-        yi = slot_y[slot]
-        color = SLOT_COLORS.get(slot, '#4F6EF7')
-        is_conflict = (day, slot) in conflict_keys
-
-        subject = str(row['Nama MK']).strip()
-        room    = str(row['Ruangan']).strip()
-        kelas   = str(row['Kelas']).strip()
-        jenis   = str(row['Jenis Ujian']).strip()
-
-        bg_color = 'rgba(227,50,60,0.15)' if is_conflict else f'rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.13)'
-        border   = '#E63946' if is_conflict else color
-
-        # Card shape
-        fig.add_shape(
-            type='rect',
-            x0=xi + 0.04, x1=xi + 0.96,
-            y0=yi + 0.04, y1=yi + 0.96,
-            fillcolor=bg_color,
-            line=dict(color=border, width=2),
-            layer='below',
-        )
-        # Left accent bar
-        fig.add_shape(
-            type='rect',
-            x0=xi + 0.04, x1=xi + 0.10,
-            y0=yi + 0.04, y1=yi + 0.96,
-            fillcolor=border,
-            line=dict(width=0),
-        )
-
-        label = f"{'⚠️ ' if is_conflict else ''}<b>{subject}</b><br><span style='font-size:10px'>🏛 {room} | {kelas}</span><br><span style='font-size:10px;color:#999'>{jenis}</span>"
-        fig.add_annotation(
-            x=xi + 0.53, y=yi + 0.50,
-            text=label,
-            showarrow=False,
-            font=dict(size=11, color='#E8ECF8'),
-            align='left',
-            xref='x', yref='y',
-        )
-
-    # ── Draw external agenda cards ───────────────────────────────────────────
+    # Determine active slots (only rows that have at least one item)
+    used = set(schedule_df['Jam'].astype(str).str.strip().tolist())
     for ea in ext_agendas:
-        day = ea['day']
-        slot = ea.get('time_slot', '')
-        if day not in day_x:
-            continue
-        xi = day_x[day]
-        yi_base = max(slot_y.values()) + 1.5  # default below
-        # Try to find closest slot
-        ea_start = ea['start_h']
-        best_slot, best_diff = None, 999
-        for s, yi2 in slot_y.items():
-            sr = TIME_RANGES.get(s)
-            if sr and abs(sr[0] - ea_start) < best_diff:
-                best_diff = abs(sr[0] - ea_start)
-                best_slot = s
-        yi = slot_y.get(best_slot, yi_base) if best_slot else yi_base
+        s = ext_to_slot(ea)
+        if s: used.add(s)
+    active_slots = [s for s in TIME_SLOTS if s in used]
+    if not active_slots:
+        active_slots = TIME_SLOTS[:]
 
-        is_conflict = any(c['day'] == day and c['ext_title'] == ea['title'] for c in conflicts)
-        border = '#E63946' if is_conflict else EXT_COLOR
-        bg     = 'rgba(227,50,60,0.12)' if is_conflict else 'rgba(42,157,143,0.13)'
+    # Lookups
+    exam_lk: dict = {}
+    for _, row in schedule_df.iterrows():
+        k = (str(row['Tanggal']).strip(), str(row['Jam']).strip())
+        exam_lk.setdefault(k, []).append(row)
 
-        fig.add_shape(
-            type='rect',
-            x0=xi + 0.04, x1=xi + 0.96,
-            y0=yi + 0.04, y1=yi + 0.96,
-            fillcolor=bg,
-            line=dict(color=border, width=2, dash='dot'),
-            layer='below',
+    ext_lk: dict = {}
+    for ea in ext_agendas:
+        s = ext_to_slot(ea)
+        if s:
+            ext_lk.setdefault((ea['day'], s), []).append(ea)
+
+    def e(s): return html_lib.escape(str(s))
+
+    out = ['<div class="cal-wrap"><table class="cal-table">']
+
+    # ── Header ───────────────────────────────────────────────────────────────
+    out.append('<thead><tr>')
+    out.append('<th class="th-corner"></th>')
+    for date in dates:
+        parts    = date.split(',', 1)
+        day_name = parts[0].strip()
+        date_str = parts[1].strip() if len(parts) > 1 else ''
+        out.append(
+            f'<th class="th-day">'
+            f'<div class="th-day-name">{e(day_name)}</div>'
+            f'<div class="th-day-date">{e(date_str)}</div>'
+            f'</th>'
         )
-        fig.add_annotation(
-            x=xi + 0.50, y=yi + 0.50,
-            text=f"{'⚠️ ' if is_conflict else '📌 '}<b>{ea['title']}</b><br><span style='font-size:10px'>{ea['start']} – {ea['end']}</span>",
-            showarrow=False,
-            font=dict(size=11, color='#C8FAF0'),
-            align='center',
-            xref='x', yref='y',
-        )
+    out.append('</tr></thead>')
 
-    # ── Axes ────────────────────────────────────────────────────────────────
-    fig.update_xaxes(
-        tickvals=list(range(len(dates))),
-        ticktext=[f"<b>{d.split(',')[0]}</b><br>{d.split(',')[1].strip()}" for d in dates],
-        tickfont=dict(size=12, color='#A0AECF', family='Syne'),
-        showgrid=False, zeroline=False,
-        range=[-0.1, len(dates) - 0.1],
-    )
-    fig.update_yaxes(
-        tickvals=list(range(len(all_slots))),
-        ticktext=[f"<b>{s}</b>" for s in all_slots],
-        tickfont=dict(size=10.5, color='#A0AECF', family='DM Sans'),
-        showgrid=True, gridcolor='#1A1D30', gridwidth=1,
-        zeroline=False,
-        range=[len(all_slots) - 0.1, -0.5],
-    )
+    # ── Body ─────────────────────────────────────────────────────────────────
+    out.append('<tbody>')
+    for slot in active_slots:
+        accent, bg = SLOT_STYLE.get(slot, DEFAULT_STYLE)
+        out.append('<tr>')
+        out.append(f'<td class="td-time"><span>{e(slot)}</span></td>')
 
-    fig.update_layout(
-        paper_bgcolor='#0D0F1A',
-        plot_bgcolor='#0D0F1A',
-        margin=dict(l=200, r=30, t=30, b=40),
-        height=max(400, len(all_slots) * 110 + 80),
-        showlegend=False,
-    )
-    return fig
+        for date in dates:
+            key   = (date, slot)
+            exams = exam_lk.get(key, [])
+            exts  = ext_lk.get(key, [])
+
+            if not exams and not exts:
+                out.append('<td class="td-empty"></td>')
+                continue
+
+            items = []
+
+            for row in exams:
+                mk    = e(str(row.get('Nama MK','') or '').strip())
+                room  = e(str(row.get('Ruangan','') or '').strip())
+                kelas = e(str(row.get('Kelas','') or '').strip())
+                jenis = e(str(row.get('Jenis Ujian','') or '').strip())
+                is_c  = key in conflict_exam_keys
+                cf    = ' conflict' if is_c else ''
+                ct    = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
+                items.append(
+                    f'<div class="c-exam{cf}" style="--ac:{accent};--bg:{bg};">'
+                    f'{ct}'
+                    f'<div class="c-exam-mk">{mk}</div>'
+                    f'<div class="c-exam-room">🏛 {room}</div>'
+                    f'<div class="c-exam-kls">👥 {kelas}</div>'
+                    f'<div class="c-exam-type">{jenis}</div>'
+                    f'</div>'
+                )
+
+            for ea in exts:
+                is_c = (date, ea['title']) in conflict_ext_keys
+                cf   = ' conflict' if is_c else ''
+                ct   = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
+                items.append(
+                    f'<div class="c-ext{cf}">'
+                    f'{ct}'
+                    f'<div class="c-ext-icon">📌</div>'
+                    f'<div class="c-ext-title">{e(ea["title"])}</div>'
+                    f'<div class="c-ext-time">⏰ {e(ea["start"])} – {e(ea["end"])}</div>'
+                    f'</div>'
+                )
+
+            out.append(f'<td class="td-fill">{"".join(items)}</td>')
+
+        out.append('</tr>')
+
+    out.append('</tbody></table></div>')
+    return '\n'.join(out)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SESSION STATE
+# SESSION STATE INIT
 # ─────────────────────────────────────────────────────────────────────────────
-if 'ext_agendas' not in st.session_state:
-    st.session_state.ext_agendas = []
-if 'df' not in st.session_state:
-    st.session_state.df = None
-if 'result' not in st.session_state:
-    st.session_state.result = None
-if 'nim_searched' not in st.session_state:
-    st.session_state.nim_searched = ''
-if 'proctor_name' not in st.session_state:
-    st.session_state.proctor_name = ''
+for key, val in [
+    ('ext_agendas', []),
+    ('df', None),
+    ('result', None),
+    ('nim_searched', ''),
+    ('proctor_name', ''),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -490,62 +436,51 @@ if 'proctor_name' not in st.session_state:
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style='padding: 8px 0 20px 0;'>
-        <span style='font-family:Syne;font-size:22px;font-weight:800;color:#E8ECF8;'>🎓 ProctorView</span><br>
-        <span style='font-size:11px;color:#5B6A9A;letter-spacing:.08em;'>UTS Schedule Lookup</span>
-    </div>
-    """, unsafe_allow_html=True)
+    <div style='padding:6px 0 22px;'>
+        <span style='font-family:Syne;font-size:20px;font-weight:800;color:#E8ECF8;'>🎓 ProctorView</span><br>
+        <span style='font-size:10px;color:#3D4A7A;letter-spacing:.1em;'>UTS SCHEDULE LOOKUP</span>
+    </div>""", unsafe_allow_html=True)
 
-    # ── CSV Upload ──
-    st.markdown('<div class="sidebar-label">📂 Data Source</div>', unsafe_allow_html=True)
-    uploaded = st.file_uploader("Upload CSV Daftar Pengawas", type=['csv'], label_visibility='collapsed')
+    st.markdown('<div class="slabel">📂 Data Source</div>', unsafe_allow_html=True)
+    uploaded = st.file_uploader("Upload CSV", type=['csv'], label_visibility='collapsed')
     if uploaded:
         try:
             st.session_state.df = load_csv(uploaded)
             st.success(f"✅ {len(st.session_state.df)} baris dimuat")
-        except Exception as e:
-            st.error(f"Gagal membaca CSV: {e}")
+        except Exception as ex:
+            st.error(f"Gagal membaca CSV: {ex}")
 
-    # ── NIM Search ──
-    st.markdown('<div class="sidebar-label">🔍 Cari NIM</div>', unsafe_allow_html=True)
-    nim_input = st.text_input("NIM Pengawas", placeholder="cth: 1302223029", label_visibility='collapsed')
+    st.markdown('<div class="slabel">🔍 Cari NIM Pengawas</div>', unsafe_allow_html=True)
+    nim_input  = st.text_input("NIM", placeholder="cth: 1302223029", label_visibility='collapsed')
     search_btn = st.button("🔍  Cari Jadwal", use_container_width=True)
 
-    if search_btn and st.session_state.df is not None and nim_input.strip():
-        result = search_nim(st.session_state.df, nim_input.strip())
-        st.session_state.result = result
-        st.session_state.nim_searched = nim_input.strip().upper()
-        if not result.empty:
-            st.session_state.proctor_name = get_name(result.iloc[0], nim_input.strip())
+    if search_btn:
+        if st.session_state.df is None:
+            st.error("Upload CSV terlebih dahulu.")
+        elif not nim_input.strip():
+            st.warning("Masukkan NIM.")
         else:
-            st.session_state.proctor_name = ''
-    elif search_btn and st.session_state.df is None:
-        st.error("Upload CSV terlebih dahulu.")
+            r = search_nim(st.session_state.df, nim_input.strip())
+            st.session_state.result       = r
+            st.session_state.nim_searched = nim_input.strip().upper()
+            st.session_state.proctor_name = get_name(r.iloc[0], nim_input.strip()) if not r.empty else ''
+            st.session_state.ext_agendas  = []
 
-    st.markdown("---")
+    st.markdown('<hr>', unsafe_allow_html=True)
 
-    # ── External Agenda ──
-    st.markdown('<div class="sidebar-label">📌 Tambah Agenda Eksternal</div>', unsafe_allow_html=True)
-
-    unique_days = []
-    if st.session_state.result is not None and not st.session_state.result.empty:
-        unique_days = sorted(st.session_state.result['Tanggal'].unique(), key=day_rank)
-
-    ext_day = st.selectbox(
-        "Hari",
-        options=unique_days if unique_days else ['(cari NIM dulu)'],
-        label_visibility='visible',
+    st.markdown('<div class="slabel">📌 Tambah Agenda Eksternal</div>', unsafe_allow_html=True)
+    res_now = st.session_state.result
+    unique_days = (
+        sorted(res_now['Tanggal'].unique(), key=day_rank)
+        if res_now is not None and not res_now.empty else []
     )
-    ext_title = st.text_input("Judul Agenda", placeholder="cth: Rapat Organisasi", label_visibility='visible')
-
+    ext_day   = st.selectbox("Hari", options=unique_days or ['(cari NIM dulu)'])
+    ext_title = st.text_input("Judul Agenda", placeholder="cth: Rapat Organisasi")
     col_s, col_e = st.columns(2)
-    with col_s:
-        ext_start = st.text_input("Mulai", value="08:00", placeholder="HH:MM", label_visibility='visible')
-    with col_e:
-        ext_end = st.text_input("Selesai", value="10:00", placeholder="HH:MM", label_visibility='visible')
+    with col_s: ext_start = st.text_input("Mulai",   value="08:00")
+    with col_e: ext_end   = st.text_input("Selesai", value="10:00")
 
     add_btn = st.button("➕  Tambah Agenda", use_container_width=True)
-
     if add_btn:
         if not ext_title.strip():
             st.warning("Isi judul agenda.")
@@ -557,163 +492,157 @@ with st.sidebar:
             if sh is None or eh is None:
                 st.error("Format waktu salah (HH:MM).")
             elif eh <= sh:
-                st.error("Waktu selesai harus setelah mulai.")
+                st.error("Waktu selesai harus setelah waktu mulai.")
             else:
                 st.session_state.ext_agendas.append({
-                    'day': ext_day,
-                    'title': ext_title.strip(),
-                    'start': ext_start,
-                    'end': ext_end,
-                    'start_h': sh,
-                    'end_h': eh,
+                    'day': ext_day, 'title': ext_title.strip(),
+                    'start': ext_start, 'end': ext_end,
+                    'start_h': sh, 'end_h': eh,
                 })
-                st.success(f"Agenda '{ext_title.strip()}' ditambahkan!")
+                st.success(f"✅ '{ext_title.strip()}' ditambahkan!")
 
-    # Show existing ext agendas
     if st.session_state.ext_agendas:
-        st.markdown('<div class="sidebar-label">📋 Agenda Eksternal</div>', unsafe_allow_html=True)
+        st.markdown('<div class="slabel">📋 Daftar Agenda</div>', unsafe_allow_html=True)
         for i, ea in enumerate(st.session_state.ext_agendas):
-            c1, c2 = st.columns([4, 1])
+            c1, c2 = st.columns([5,1])
             with c1:
-                st.markdown(f"<span style='color:#C8FAF0;font-size:12px;'>📌 <b>{ea['title']}</b><br>{ea['day'].split(',')[0]} | {ea['start']}–{ea['end']}</span>", unsafe_allow_html=True)
+                ds = ea['day'].split(',')[0] if ',' in ea['day'] else ea['day']
+                st.markdown(
+                    f"<div style='font-size:11px;color:#C8FAF0;'><b>{ea['title']}</b></div>"
+                    f"<div style='font-size:10px;color:#3D4A7A;'>{ds} · {ea['start']}–{ea['end']}</div>",
+                    unsafe_allow_html=True
+                )
             with c2:
                 if st.button("✕", key=f"del_{i}"):
                     st.session_state.ext_agendas.pop(i)
                     st.rerun()
-
-    if st.session_state.ext_agendas:
-        if st.button("🗑  Hapus Semua", use_container_width=True):
+        if st.button("🗑 Hapus Semua", use_container_width=True):
             st.session_state.ext_agendas = []
             st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MAIN CONTENT
+# MAIN
 # ─────────────────────────────────────────────────────────────────────────────
-
 result = st.session_state.result
 nim    = st.session_state.nim_searched
 name   = st.session_state.proctor_name
 ext    = st.session_state.ext_agendas
 
-# ── Empty state ──────────────────────────────────────────────────────────────
+def e(s): return html_lib.escape(str(s))
+
+# ── Empty states ──────────────────────────────────────────────────────────────
 if result is None or result.empty:
     if result is not None and result.empty:
-        st.markdown(f"""
-        <div style='text-align:center;padding:80px 0;'>
-            <div style='font-size:48px;margin-bottom:16px;'>🔍</div>
-            <div style='font-family:Syne;font-size:22px;font-weight:700;color:#E8ECF8;'>NIM tidak ditemukan</div>
-            <div style='color:#5B6A9A;margin-top:8px;'>NIM <code style='color:#4F6EF7'>{nim}</code> tidak ada dalam daftar pengawas</div>
-        </div>
-        """, unsafe_allow_html=True)
+        body = (f'<div style="font-family:Syne;font-size:18px;font-weight:700;color:#E8ECF8;">NIM tidak ditemukan</div>'
+                f'<div style="color:#3D4A7A;margin-top:8px;">NIM <code style="color:#4F6EF7">{e(nim)}</code> tidak ada dalam data.</div>')
     else:
-        st.markdown("""
-        <div style='text-align:center;padding:80px 0;'>
-            <div style='font-size:48px;margin-bottom:16px;'>🎓</div>
-            <div style='font-family:Syne;font-size:24px;font-weight:700;color:#E8ECF8;'>ProctorView</div>
-            <div style='color:#5B6A9A;margin-top:10px;font-size:15px;'>Upload CSV dan masukkan NIM untuk melihat jadwal pengawasan</div>
-            <div style='color:#2A2E4A;margin-top:32px;font-size:13px;'>← Gunakan panel kiri untuk memulai</div>
-        </div>
-        """, unsafe_allow_html=True)
+        body = ('<div style="font-family:Syne;font-size:22px;font-weight:700;color:#E8ECF8;">ProctorView</div>'
+                '<div style="color:#3D4A7A;margin-top:10px;">Upload CSV &amp; masukkan NIM untuk melihat jadwal pengawasan.</div>'
+                '<div style="color:#1C2040;margin-top:28px;font-size:12px;">← Gunakan panel kiri untuk memulai</div>')
+    st.markdown(f'<div style="text-align:center;padding:80px 0;"><div style="font-size:44px;margin-bottom:16px;">🎓</div>{body}</div>', unsafe_allow_html=True)
     st.stop()
 
-
-# ── Conflict detection ───────────────────────────────────────────────────────
+# ── Conflicts ─────────────────────────────────────────────────────────────────
 conflicts = detect_conflicts(result, ext)
 
-# ── Name hero ───────────────────────────────────────────────────────────────
-conflict_badge = f"<span style='background:#E63946;color:white;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;margin-left:10px;'>⚠️ {len(conflicts)} KONFLIK</span>" if conflicts else ""
+# ── Hero ─────────────────────────────────────────────────────────────────────
+cp = f'<span class="conf-pill">⚠️ {len(conflicts)} KONFLIK</span>' if conflicts else ''
 st.markdown(f"""
-<div class="name-hero">
-    <div class="name-greeting">Jadwal Pengawas UTS FIF</div>
-    <div class="name-big">{name} {conflict_badge}</div>
-    <span class="nim-chip">{nim}</span>
-    <span style='color:#5B6A9A;font-size:12px;margin-left:12px;'>{len(result)} sesi pengawasan</span>
+<div class="hero">
+    <div class="hero-label">Jadwal Pengawas UTS FIF</div>
+    <div class="hero-name">{e(name)} {cp}</div>
+    <span class="nim-pill">{e(nim)}</span>
+    <span style="color:#3D4A7A;font-size:11px;margin-left:10px;">{len(result)} sesi pengawasan</span>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Metrics ──────────────────────────────────────────────────────────────────
-n_days    = result['Tanggal'].nunique()
-n_ext     = len(ext)
+# ── Metrics ───────────────────────────────────────────────────────────────────
+m1,m2,m3,m4 = st.columns(4)
+with m1: st.markdown(f'<div class="mcard"><div class="mnum">{len(result)}</div><div class="mlbl">Total Sesi</div></div>', unsafe_allow_html=True)
+with m2: st.markdown(f'<div class="mcard"><div class="mnum">{result["Tanggal"].nunique()}</div><div class="mlbl">Hari Aktif</div></div>', unsafe_allow_html=True)
+with m3: st.markdown(f'<div class="mcard"><div class="mnum">{len(ext)}</div><div class="mlbl">Agenda Eksternal</div></div>', unsafe_allow_html=True)
+with m4:
+    rcls = ' mnum-red' if conflicts else ''
+    st.markdown(f'<div class="mcard"><div class="mnum{rcls}">{len(conflicts)}</div><div class="mlbl">Konflik Jadwal</div></div>', unsafe_allow_html=True)
 
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    st.markdown(f'<div class="metric-card"><div class="metric-num">{len(result)}</div><div class="metric-label">Total Sesi</div></div>', unsafe_allow_html=True)
-with c2:
-    st.markdown(f'<div class="metric-card"><div class="metric-num">{n_days}</div><div class="metric-label">Hari Aktif</div></div>', unsafe_allow_html=True)
-with c3:
-    st.markdown(f'<div class="metric-card"><div class="metric-num">{n_ext}</div><div class="metric-label">Agenda Eksternal</div></div>', unsafe_allow_html=True)
-with c4:
-    conflict_color = '#E63946' if conflicts else '#2A9D8F'
-    st.markdown(f'<div class="metric-card"><div class="metric-num" style="background:linear-gradient(135deg,{conflict_color},{conflict_color});-webkit-background-clip:text;">{len(conflicts)}</div><div class="metric-label">Konflik Jadwal</div></div>', unsafe_allow_html=True)
-
-# ── Conflict banners ─────────────────────────────────────────────────────────
+# ── Conflict banners ──────────────────────────────────────────────────────────
 if conflicts:
-    st.markdown('<div class="section-header">⚠️ Konflik Terdeteksi</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-h">⚠️ Konflik Terdeteksi</div>', unsafe_allow_html=True)
     for c in conflicts:
+        ds = c['day'].split(',')[0].strip()
         st.markdown(f"""
-        <div class="conflict-banner">
-            <div class="conflict-title">⚠️ Konflik pada {c['day'].split(',')[0]}</div>
-            <div class="conflict-item">
-                🏫 <b>Pengawasan:</b> {c['exam_subject']} · {c['exam_slot']} · {c['exam_room']}
-            </div>
-            <div class="conflict-item">
-                📌 <b>Agenda Eksternal:</b> {c['ext_title']} · {c['ext_time']}
-            </div>
+        <div class="cbanner">
+            <div class="ctitle">⚠️ Konflik — {e(ds)}</div>
+            <div class="citem">🏫 <b>Pengawasan:</b> {e(c['exam_subject'])} &nbsp;·&nbsp; {e(c['exam_slot'])} &nbsp;·&nbsp; {e(c['exam_room'])}</div>
+            <div class="citem">📌 <b>Eksternal:</b> {e(c['ext_title'])} &nbsp;·&nbsp; {e(c['ext_time'])}</div>
         </div>
         """, unsafe_allow_html=True)
 
-# ── Calendar ─────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📅 Kalender Jadwal</div>', unsafe_allow_html=True)
-fig = build_calendar(result, ext, conflicts)
-st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+# ── Calendar ──────────────────────────────────────────────────────────────────
+st.markdown('<div class="sec-h">📅 Kalender Jadwal</div>', unsafe_allow_html=True)
 
-# ── Per-day schedule list ────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📋 Rincian Per Hari</div>', unsafe_allow_html=True)
+# Legend
+used_slots = set(result['Jam'].astype(str).str.strip().tolist())
+leg = '<div class="legend-row">'
+for slot, (ac, _) in SLOT_STYLE.items():
+    if slot in used_slots:
+        leg += f'<div class="legend-item"><span class="legend-dot" style="background:{ac};"></span>{e(slot)}</div>'
+if ext:
+    leg += f'<div class="legend-item"><span class="legend-dot" style="background:{EXT_COLOR};border:2px dashed {EXT_COLOR};box-sizing:border-box;"></span>Agenda Eksternal</div>'
+if conflicts:
+    leg += '<div class="legend-item"><span class="legend-dot" style="background:#E63946;"></span>Konflik</div>'
+leg += '</div>'
+st.markdown(leg, unsafe_allow_html=True)
+
+st.markdown(build_calendar_html(result, ext, conflicts), unsafe_allow_html=True)
+
+# ── Per-day detail list ───────────────────────────────────────────────────────
+st.markdown('<div class="sec-h">📋 Rincian Per Hari</div>', unsafe_allow_html=True)
+
+cek  = {(c['day'], c['exam_slot']) for c in conflicts}
+cxk  = {(c['day'], c['ext_title'])  for c in conflicts}
 dates = sorted(result['Tanggal'].unique(), key=day_rank)
 
 for date in dates:
-    day_rows = result[result['Tanggal'] == date]
-    day_ext  = [e for e in ext if e['day'] == date]
-    day_name = date.split(',')[0].strip()
-    date_str = date.split(',')[1].strip() if ',' in date else date
+    dr  = result[result['Tanggal'] == date]
+    dex = [a for a in ext if a['day'] == date]
+    dn  = date.split(',')[0].strip()
+    ds2 = date.split(',')[1].strip() if ',' in date else date
 
-    with st.expander(f"**{day_name}** — {date_str}  ·  {len(day_rows)} sesi pengawasan", expanded=True):
-        for _, row in day_rows.iterrows():
-            slot    = str(row['Jam']).strip()
-            subject = str(row['Nama MK']).strip()
-            room    = str(row['Ruangan']).strip()
-            kelas   = str(row['Kelas']).strip()
-            jenis   = str(row['Jenis Ujian']).strip()
-            color   = SLOT_COLORS.get(slot, '#4F6EF7')
-            is_conf = (date, slot) in {(c['day'], c['exam_slot']) for c in conflicts}
-
-            conf_html = '<span class="conflict-dot"></span><span style="color:#E63946;font-size:11px;font-weight:600;">KONFLIK</span>' if is_conf else ''
+    with st.expander(f"**{dn}** — {ds2}  ·  {len(dr)} sesi", expanded=False):
+        for _, row in dr.iterrows():
+            slot  = str(row['Jam']).strip()
+            subj  = str(row.get('Nama MK','') or '').strip()
+            room  = str(row.get('Ruangan','') or '').strip()
+            kelas = str(row.get('Kelas','') or '').strip()
+            jenis = str(row.get('Jenis Ujian','') or '').strip()
+            ac    = SLOT_STYLE.get(slot, DEFAULT_STYLE)[0]
+            ic    = (date, slot) in cek
+            ct    = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
+                     if ic else '')
             st.markdown(f"""
-            <div class="sched-card" style="--accent:{color}">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                    <div class="sched-mk">{subject}</div>
-                    <div>{conf_html}</div>
+            <div class="lcard" style="--ac:{ac}">
+                <div class="lcard-title">{e(subj)}{ct}</div>
+                <div class="lcard-meta">
+                    <span class="badge">⏰ {e(slot)}</span>
+                    <span class="badge">🏛 {e(room)}</span>
+                    <span class="badge">👥 {e(kelas)}</span>
+                    <span class="badge">{e(jenis)}</span>
                 </div>
-                <div class="sched-meta">
-                    <span class="sched-badge">⏰ {slot}</span>
-                    <span class="sched-badge">🏛 {room}</span>
-                    <span class="sched-badge">👥 {kelas}</span>
-                    <span class="sched-badge">{jenis}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
-        if day_ext:
-            st.markdown('<div style="color:#5B6A9A;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:12px 0 6px 0;">📌 Agenda Eksternal</div>', unsafe_allow_html=True)
-            for ea in day_ext:
-                is_conf_ext = any(c['day'] == date and c['ext_title'] == ea['title'] for c in conflicts)
-                border_ext  = '#E63946' if is_conf_ext else EXT_COLOR
+        if dex:
+            st.markdown('<div style="color:#3D4A7A;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin:14px 0 6px;">📌 Agenda Eksternal</div>', unsafe_allow_html=True)
+            for ea in dex:
+                ixc = (date, ea['title']) in cxk
+                bc  = '#E63946' if ixc else EXT_COLOR
+                ct2 = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
+                       if ixc else '')
                 st.markdown(f"""
-                <div class="ext-card" style="border-left-color:{border_ext}">
-                    <div class="sched-mk" style="color:#C8FAF0;">{'⚠️ ' if is_conf_ext else '📌 '}{ea['title']}</div>
-                    <div class="sched-meta">
-                        <span class="sched-badge" style="color:#2A9D8F;">⏰ {ea['start']} – {ea['end']}</span>
+                <div class="ext-lcard" style="border-left-color:{bc}">
+                    <div class="lcard-title" style="color:#C8FAF0;">📌 {e(ea['title'])}{ct2}</div>
+                    <div class="lcard-meta">
+                        <span class="badge" style="color:#2A9D8F;">⏰ {e(ea['start'])} – {e(ea['end'])}</span>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                </div>""", unsafe_allow_html=True)

@@ -384,7 +384,30 @@ def load_data_from_url():
 
     df.columns = df.columns.str.strip()
     df = df[df["Tanggal"].notna() & (df["Tanggal"].astype(str).str.strip() != "")].copy()
-    df["Tanggal"] = df["Tanggal"].astype(str).str.strip()
+
+    # Konversi kolom Tanggal: bisa datetime (dari Excel) atau string
+    HARI_ID = {0:"Senin",1:"Selasa",2:"Rabu",3:"Kamis",4:"Jumat",5:"Sabtu",6:"Minggu"}
+    BULAN_ID = {1:"Januari",2:"Februari",3:"Maret",4:"April",5:"Mei",6:"Juni",
+                7:"Juli",8:"Agustus",9:"September",10:"Oktober",11:"November",12:"Desember"}
+
+    def normalize_tanggal(val):
+        import pandas as _pd
+        # Sudah datetime/Timestamp
+        if hasattr(val, "day"):
+            hari = HARI_ID.get(val.weekday(), str(val))
+            return f"{hari}, {val.day} {BULAN_ID.get(val.month, val.month)}"
+        s = str(val).strip()
+        # Format YYYY-MM-DD dari Excel yang sudah di-cast string
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            try:
+                dt = _pd.to_datetime(s)
+                hari = HARI_ID.get(dt.weekday(), s)
+                return f"{hari}, {dt.day} {BULAN_ID.get(dt.month, dt.month)}"
+            except Exception:
+                pass
+        return s  # sudah format "Senin, 20 April" dll
+
+    df["Tanggal"] = df["Tanggal"].apply(normalize_tanggal)
     df["Jam"] = df["Jam"].astype(str).str.strip()
     for col in ["NIM (Pengawas 1)", "NIM (Pengawas 2)", "NIM (Pengawas 3)"]:
         df[col] = df[col].astype(str).str.strip().str.lstrip("`").str.upper()
@@ -453,12 +476,17 @@ def ext_to_slot(ea):
 # CALENDAR HTML — pure table, no Plotly
 # ─────────────────────────────────────────────────────────────────────────────
 def build_calendar_html(schedule_df, ext_agendas, conflicts):
-    conflict_exam_keys = {(c['day'], c['exam_slot']) for c in conflicts}
-    conflict_ext_keys  = {(c['day'], c['ext_title'])  for c in conflicts}
+    # Normalize semua key conflict agar cocok dengan format "Senin, 20 April"
+    conflict_exam_keys = {(str(c['day']).strip(), str(c['exam_slot']).strip()) for c in conflicts}
+    conflict_ext_keys  = {(str(c['day']).strip(), str(c['ext_title']).strip()) for c in conflicts}
 
-    dates = sorted(schedule_df['Tanggal'].unique(), key=day_rank)
+    # Urutkan berdasarkan hari (Senin→Minggu)
+    dates = sorted(
+        [str(d).strip() for d in schedule_df['Tanggal'].unique()],
+        key=day_rank
+    )
 
-    # Determine active slots (only rows that have at least one item)
+    # Slot aktif saja yang ditampilkan
     used = set(schedule_df['Jam'].astype(str).str.strip().tolist())
     for ea in ext_agendas:
         s = ext_to_slot(ea)
@@ -467,7 +495,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
     if not active_slots:
         active_slots = TIME_SLOTS[:]
 
-    # Lookups
+    # Lookup: (tanggal_str, slot_str) -> list of rows/agendas
     exam_lk: dict = {}
     for _, row in schedule_df.iterrows():
         k = (str(row['Tanggal']).strip(), str(row['Jam']).strip())
@@ -477,19 +505,19 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
     for ea in ext_agendas:
         s = ext_to_slot(ea)
         if s:
-            ext_lk.setdefault((ea['day'], s), []).append(ea)
+            ext_lk.setdefault((str(ea['day']).strip(), s), []).append(ea)
 
     def e(s): return html_lib.escape(str(s))
 
     out = ['<div class="cal-wrap"><table class="cal-table">']
 
-    # ── Header ───────────────────────────────────────────────────────────────
+    # ── Header: tampilkan nama hari + tanggal ─────────────────────────────────
     out.append('<thead><tr>')
     out.append('<th class="th-corner"></th>')
     for date in dates:
         parts    = str(date).split(',', 1)
-        day_name = parts[0].strip()
-        date_str = parts[1].strip() if len(parts) > 1 else ''
+        day_name = parts[0].strip()          # "Senin"
+        date_str = parts[1].strip() if len(parts) > 1 else ''  # "20 April"
         out.append(
             f'<th class="th-day">'
             f'<div class="th-day-name">{e(day_name)}</div>'
@@ -506,9 +534,10 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
         out.append(f'<td class="td-time"><span>{e(slot)}</span></td>')
 
         for date in dates:
-            key   = (date, slot)
-            exams = exam_lk.get(key, [])
-            exts  = ext_lk.get(key, [])
+            date_norm = str(date).strip()
+            key       = (date_norm, slot)
+            exams     = exam_lk.get(key, [])
+            exts      = ext_lk.get(key, [])
 
             if not exams and not exts:
                 out.append('<td class="td-empty"></td>')
@@ -521,9 +550,10 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
                 room  = e(str(row.get('Ruangan','') or '').strip())
                 kelas = e(str(row.get('Kelas','') or '').strip())
                 jenis = e(str(row.get('Jenis Ujian','') or '').strip())
-                is_c  = key in conflict_exam_keys
-                cf    = ' conflict' if is_c else ''
-                ct    = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
+                # Conflict check: cocokkan per exam individual (bukan seluruh slot)
+                is_c = (date_norm, slot) in conflict_exam_keys
+                cf   = ' conflict' if is_c else ''
+                ct   = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
                 items.append(
                     f'<div class="c-exam{cf}" style="--ac:{accent};--bg:{bg};">'
                     f'{ct}'
@@ -535,7 +565,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
                 )
 
             for ea in exts:
-                is_c = (date, ea['title']) in conflict_ext_keys
+                is_c = (date_norm, str(ea['title']).strip()) in conflict_ext_keys
                 cf   = ' conflict' if is_c else ''
                 ct   = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
                 items.append(
@@ -775,15 +805,16 @@ st.markdown(build_calendar_html(result, ext, conflicts), unsafe_allow_html=True)
 # ── Per-day detail list ───────────────────────────────────────────────────────
 st.markdown('<div class="sec-h">📋 Rincian Per Hari</div>', unsafe_allow_html=True)
 
-cek  = {(c['day'], c['exam_slot']) for c in conflicts}
-cxk  = {(c['day'], c['ext_title'])  for c in conflicts}
-dates = sorted(result['Tanggal'].unique(), key=day_rank)
+cek  = {(str(c['day']).strip(), str(c['exam_slot']).strip()) for c in conflicts}
+cxk  = {(str(c['day']).strip(), str(c['ext_title']).strip())  for c in conflicts}
+dates = sorted([str(d).strip() for d in result['Tanggal'].unique()], key=day_rank)
 
 for date in dates:
-    dr  = result[result['Tanggal'] == date]
-    dex = [a for a in ext if a['day'] == date]
-    dn  = str(date).split(',')[0].strip()
-    ds2 = str(date).split(',')[1].strip() if ',' in str(date) else str(date)
+    date_norm = str(date).strip()
+    dr  = result[result['Tanggal'].astype(str).str.strip() == date_norm]
+    dex = [a for a in ext if str(a['day']).strip() == date_norm]
+    dn  = date_norm.split(',')[0].strip()
+    ds2 = date_norm.split(',')[1].strip() if ',' in date_norm else date_norm
 
     with st.expander(f"**{dn}** — {ds2}  ·  {len(dr)} sesi", expanded=False):
         for _, row in dr.iterrows():
@@ -793,7 +824,7 @@ for date in dates:
             kelas = str(row.get('Kelas','') or '').strip()
             jenis = str(row.get('Jenis Ujian','') or '').strip()
             ac    = SLOT_STYLE.get(slot, DEFAULT_STYLE)[0]
-            ic    = (date, slot) in cek
+            ic    = (date_norm, slot) in cek
             ct    = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
                      if ic else '')
             st.markdown(f"""
@@ -810,7 +841,7 @@ for date in dates:
         if dex:
             st.markdown('<div style="color:#3D4A7A;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin:14px 0 6px;">📌 Agenda Eksternal</div>', unsafe_allow_html=True)
             for ea in dex:
-                ixc = (date, ea['title']) in cxk
+                ixc = (date_norm, str(ea['title']).strip()) in cxk
                 bc  = '#E63946' if ixc else EXT_COLOR
                 ct2 = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
                        if ixc else '')

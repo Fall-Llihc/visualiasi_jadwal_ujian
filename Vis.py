@@ -412,6 +412,26 @@ def load_data_from_url():
     for col in ["NIM (Pengawas 1)", "NIM (Pengawas 2)", "NIM (Pengawas 3)"]:
         df[col] = df[col].astype(str).str.strip().str.lstrip("`").str.upper()
         df[col] = df[col].replace({"NAN": "", "NONE": ""})
+
+    # Hitung kolom ROW: 1st / 2nd jika kelas dibagi 2 ruangan, - jika tidak
+    from collections import Counter
+    _gcols = ["Kode MK", "Kelas", "Tanggal", "Jam"]
+    _gcols_ok = [c for c in _gcols if c in df.columns]
+    if len(_gcols_ok) == 4:
+        _keys = [tuple(str(r[c]) for c in _gcols_ok) for _, r in df.iterrows()]
+        _cnt  = Counter(_keys)
+        _seen = {}
+        _lbl  = []
+        for k in _keys:
+            if _cnt[k] == 1:
+                _lbl.append("-")
+            else:
+                _seen[k] = _seen.get(k, 0) + 1
+                _lbl.append("1st" if _seen[k] == 1 else "2nd")
+        df["ROW"] = _lbl
+    else:
+        df["ROW"] = "-"
+
     return df, None
 
 def search_nim(df, nim):
@@ -550,6 +570,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
                 room  = e(str(row.get('Ruangan','') or '').strip())
                 kelas = e(str(row.get('Kelas','') or '').strip())
                 jenis = e(str(row.get('Jenis Ujian','') or '').strip())
+                row_v = e(str(row.get('ROW','-') or '-').strip())
                 # Conflict check: cocokkan per exam individual (bukan seluruh slot)
                 is_c = (date_norm, slot) in conflict_exam_keys
                 cf   = ' conflict' if is_c else ''
@@ -559,7 +580,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
                     f'{ct}'
                     f'<div class="c-exam-mk">{mk}</div>'
                     f'<div class="c-exam-room">🏛 {room}</div>'
-                    f'<div class="c-exam-kls">👥 {kelas}</div>'
+                    f'<div class="c-exam-kls">👥 {kelas} &nbsp;· 🔢 ROW: {row_v}</div>'
                     f'<div class="c-exam-type">{jenis}</div>'
                     f'</div>'
                 )
@@ -823,6 +844,7 @@ for date in dates:
             room  = str(row.get('Ruangan','') or '').strip()
             kelas = str(row.get('Kelas','') or '').strip()
             jenis = str(row.get('Jenis Ujian','') or '').strip()
+            row_label = str(row.get('ROW','-') or '-').strip()
             ac    = SLOT_STYLE.get(slot, DEFAULT_STYLE)[0]
             ic    = (date_norm, slot) in cek
             ct    = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
@@ -854,6 +876,7 @@ for date in dates:
                     <span class="badge">⏰ {e(slot)}</span>
                     <span class="badge">🏛 {e(room)}</span>
                     <span class="badge">👥 {e(kelas)}</span>
+                    <span class="badge" style="color:#F4A261">🔢 ROW: {e(row_label)}</span>
                     <span class="badge">{e(jenis)}</span>
                 </div>
                 {rekan_html}

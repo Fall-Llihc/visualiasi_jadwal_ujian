@@ -301,33 +301,92 @@ def show_rt_status(dot_color: str, label: str, detail: str = ""):
 def load_data_from_url():
     """Download Excel dari SharePoint menggunakan Cookie dari Streamlit Secrets."""
     try:
-        cookie = st.secrets["SHAREPOINT_COOKIE"]
+        raw_cookie = st.secrets["SHAREPOINT_COOKIE"]
     except Exception:
         return None, "SHAREPOINT_COOKIE belum diset di Streamlit Secrets!"
 
+    # Bersihkan newline/spasi yang mungkin masuk saat copy-paste di TOML
+    cookie = " ".join(raw_cookie.strip().splitlines())
+
+    session = requests.Session()
+
+    # Parse cookie string -> set tiap pasang name=value ke session
+    # agar cookie ikut di seluruh redirect chain SharePoint
+    for part in cookie.split(";"):
+        part = part.strip()
+        if "=" in part:
+            name, _, value = part.partition("=")
+            session.cookies.set(name.strip(), value.strip(), domain=".sharepoint.com")
+            session.cookies.set(name.strip(), value.strip(), domain="telkomuniversityofficial-my.sharepoint.com")
+
     headers = {
-        "Cookie": cookie,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/octet-stream,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*",
-        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+            "application/octet-stream,*/*;q=0.9"
+        ),
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
         "Referer": "https://telkomuniversityofficial-my.sharepoint.com/",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
     }
 
-    response = requests.get(SHAREPOINT_URL, headers=headers, timeout=30, allow_redirects=True)
+    try:
+        response = session.get(
+            SHAREPOINT_URL,
+            headers=headers,
+            timeout=45,
+            allow_redirects=True,
+        )
+    except requests.exceptions.Timeout:
+        return None, "Request timeout (>45 detik). Coba lagi."
+    except requests.exceptions.ConnectionError as ce:
+        return None, f"Koneksi gagal: {ce}"
 
+    if response.status_code == 401:
+        return None, "401 Unauthorized — Cookie expired atau tidak valid."
+    if response.status_code == 403:
+        return None, "403 Forbidden — Akun tidak punya akses ke file ini."
     if response.status_code != 200:
-        return None, f"HTTP {response.status_code} — Cookie mungkin expired, update di Secrets!"
+        return None, f"HTTP {response.status_code} — Coba refresh cookie."
 
     content_type = response.headers.get("Content-Type", "")
-    if "html" in content_type.lower():
-        return None, "SharePoint mengembalikan halaman HTML (bukan file). Cookie expired atau salah."
+    content_len  = len(response.content)
 
-    df = pd.read_excel(io.BytesIO(response.content), skiprows=12)
+    # Jika balik HTML berarti diredirect ke halaman login
+    if "html" in content_type.lower():
+        preview = response.text[:300].replace("\n", " ")
+        return None, (
+            f"SharePoint mengembalikan HTML (bukan Excel). "
+            f"Cookie kemungkinan expired.\n\n"
+            f"Debug — CT: {content_type} | "
+            f"Size: {content_len} bytes | Preview: {preview[:150]}"
+        )
+
+    # Validasi minimal ukuran file Excel
+    if content_len < 5000:
+        return None, (
+            f"File terlalu kecil ({content_len} bytes) — bukan Excel valid. "
+            f"Cek link SharePoint atau cookie."
+        )
+
+    try:
+        df = pd.read_excel(io.BytesIO(response.content), skiprows=12)
+    except Exception as ex:
+        return None, f"Gagal parse Excel: {ex}"
+
     df.columns = df.columns.str.strip()
-    df = df[df['Tanggal'].notna() & (df['Tanggal'].astype(str).str.strip() != '')].copy()
-    for col in ['NIM (Pengawas 1)', 'NIM (Pengawas 2)', 'NIM (Pengawas 3)']:
-        df[col] = df[col].astype(str).str.strip().str.lstrip('`').str.upper()
-        df[col] = df[col].replace({'NAN': '', 'NONE': ''})
+    df = df[df["Tanggal"].notna() & (df["Tanggal"].astype(str).str.strip() != "")].copy()
+    for col in ["NIM (Pengawas 1)", "NIM (Pengawas 2)", "NIM (Pengawas 3)"]:
+        df[col] = df[col].astype(str).str.strip().str.lstrip("`").str.upper()
+        df[col] = df[col].replace({"NAN": "", "NONE": ""})
     return df, None
 
 def search_nim(df, nim):

@@ -827,6 +827,26 @@ for date in dates:
             ic    = (date_norm, slot) in cek
             ct    = ('<span style="background:#E63946;color:#fff;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:8px;">⚠ KONFLIK</span>'
                      if ic else '')
+
+            # Kumpulkan pengawas lain dalam 1 plottingan yang sama (bukan diri sendiri)
+            rekan_html = ''
+            rekan_list = []
+            for i in ['1','2','3']:
+                nim_col  = f'NIM (Pengawas {i})'
+                nama_col = f'Nama Lengkap (Pengawas {i})'
+                r_nim  = str(row.get(nim_col,'') or '').strip().upper()
+                r_nama = str(row.get(nama_col,'') or '').strip()
+                if r_nim and r_nim not in ('NAN','NONE','') and r_nim != nim.upper():
+                    label = r_nama if r_nama and r_nama not in ('-','NAN','NONE','nan') else r_nim
+                    rekan_list.append(f'<span style="display:inline-flex;align-items:center;gap:4px;background:#1C2040;border:1px solid #2A3060;color:#A78BFA;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:600;margin:2px 3px 2px 0;">👤 {e(label)}</span>')
+            if rekan_list:
+                rekan_html = (
+                    '<div style="margin-top:9px;padding-top:8px;border-top:1px solid #1C2040;">'
+                    '<div style="font-size:9px;color:#3D4A7A;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;">Rekan Pengawas</div>'
+                    '<div style="display:flex;flex-wrap:wrap;">' + ''.join(rekan_list) + '</div>'
+                    '</div>'
+                )
+
             st.markdown(f"""
             <div class="lcard" style="--ac:{ac}">
                 <div class="lcard-title">{e(subj)}{ct}</div>
@@ -836,6 +856,7 @@ for date in dates:
                     <span class="badge">👥 {e(kelas)}</span>
                     <span class="badge">{e(jenis)}</span>
                 </div>
+                {rekan_html}
             </div>""", unsafe_allow_html=True)
 
         if dex:

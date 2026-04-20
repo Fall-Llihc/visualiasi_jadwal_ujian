@@ -409,9 +409,18 @@ def load_data_from_url():
 
     df["Tanggal"] = df["Tanggal"].apply(normalize_tanggal)
     df["Jam"] = df["Jam"].astype(str).str.strip()
+    def normalize_nim(value):
+        s = str(value).strip()
+        if s.startswith("`"):
+            s = s.lstrip("`").strip()
+        if s.upper() in {"NAN", "NONE", ""}:
+            return ""
+        if s.endswith(".0") and s[:-2].isdigit():
+            s = s[:-2]
+        return s.upper()
+
     for col in ["NIM (Pengawas 1)", "NIM (Pengawas 2)", "NIM (Pengawas 3)"]:
-        df[col] = df[col].astype(str).str.strip().str.lstrip("`").str.upper()
-        df[col] = df[col].replace({"NAN": "", "NONE": ""})
+        df[col] = df[col].astype(str).apply(normalize_nim)
 
     # Hitung kolom ROW: 1st / 2nd jika kelas dibagi 2 ruangan, - jika tidak
     from collections import Counter
@@ -435,7 +444,7 @@ def load_data_from_url():
     return df, None
 
 def search_nim(df, nim):
-    nim = nim.strip().upper()
+    nim = normalize_nim(nim)
     mask = (
         (df['NIM (Pengawas 1)'] == nim) |
         (df['NIM (Pengawas 2)'] == nim) |
@@ -446,13 +455,25 @@ def search_nim(df, nim):
     r['_time'] = r['Jam'].apply(time_rank)
     return r.sort_values(['_day','_time']).reset_index(drop=True)
 
+def normalize_nim(value):
+    s = str(value).strip()
+    if s.startswith("`"):
+        s = s.lstrip("`").strip()
+    if s.upper() in {"NAN", "NONE", ""}:
+        return ""
+    if s.endswith(".0") and s[:-2].isdigit():
+        s = s[:-2]
+    return s.upper()
+
+
 def get_name(row, nim):
-    nim = nim.strip().upper()
+    nim = normalize_nim(nim)
     for i in ['1','2','3']:
-        v = str(row.get(f'NIM (Pengawas {i})','') or '').strip().upper()
+        v = normalize_nim(row.get(f'NIM (Pengawas {i})', ''))
         if v == nim:
             return str(row.get(f'Nama Lengkap (Pengawas {i})','') or '-').strip()
     return '-'
+
 
 def parse_ext_time(t):
     try:

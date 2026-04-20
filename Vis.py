@@ -384,6 +384,8 @@ def load_data_from_url():
 
     df.columns = df.columns.str.strip()
     df = df[df["Tanggal"].notna() & (df["Tanggal"].astype(str).str.strip() != "")].copy()
+    df["Tanggal"] = df["Tanggal"].astype(str).str.strip()
+    df["Jam"] = df["Jam"].astype(str).str.strip()
     for col in ["NIM (Pengawas 1)", "NIM (Pengawas 2)", "NIM (Pengawas 3)"]:
         df[col] = df[col].astype(str).str.strip().str.lstrip("`").str.upper()
         df[col] = df[col].replace({"NAN": "", "NONE": ""})
@@ -485,7 +487,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
     out.append('<thead><tr>')
     out.append('<th class="th-corner"></th>')
     for date in dates:
-        parts    = date.split(',', 1)
+        parts    = str(date).split(',', 1)
         day_name = parts[0].strip()
         date_str = parts[1].strip() if len(parts) > 1 else ''
         out.append(
@@ -780,8 +782,8 @@ dates = sorted(result['Tanggal'].unique(), key=day_rank)
 for date in dates:
     dr  = result[result['Tanggal'] == date]
     dex = [a for a in ext if a['day'] == date]
-    dn  = date.split(',')[0].strip()
-    ds2 = date.split(',')[1].strip() if ',' in date else date
+    dn  = str(date).split(',')[0].strip()
+    ds2 = str(date).split(',')[1].strip() if ',' in str(date) else str(date)
 
     with st.expander(f"**{dn}** — {ds2}  ·  {len(dr)} sesi", expanded=False):
         for _, row in dr.iterrows():

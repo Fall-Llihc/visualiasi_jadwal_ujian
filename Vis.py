@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import html as html_lib
+import io
+import requests
+import time
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -87,7 +90,40 @@ hr { border-color:#1C2040 !important; }
 .badge { display:inline-block; background:#1C2040; color:#A78BFA; border-radius:5px; padding:2px 7px; font-size:10px; font-weight:600; margin-right:5px; }
 .ext-lcard { background:#0E1A18; border:1px solid #1A3530; border-left:4px solid #2A9D8F; border-radius:11px; padding:13px 16px; margin-bottom:9px; }
 
-/* ─── CALENDAR ─── */
+/* ─── REALTIME STATUS ─── */
+.rt-status {
+    position: fixed;
+    bottom: 18px;
+    left: 18px;
+    z-index: 9999;
+    background: #0F1120;
+    border: 1px solid #1C2040;
+    border-radius: 10px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #5B6A9A;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    max-width: 320px;
+    pointer-events: none;
+}
+.rt-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    animation: pulse 1.8s ease-in-out infinite;
+}
+.rt-dot.green  { background: #2A9D8F; }
+.rt-dot.blue   { background: #4F6EF7; }
+.rt-dot.red    { background: #E63946; animation: none; }
+.rt-dot.yellow { background: #F4A261; }
+@keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.4; transform:scale(.75); }
+}
+.rt-text { font-family:'DM Sans',sans-serif; line-height:1.3; }
+.rt-text b { color:#E8ECF8; font-weight:600; }
+
 .cal-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 32px; }
 
 .cal-table {
@@ -248,14 +284,51 @@ def time_rank(t):
     t = str(t).strip()
     return TIME_SLOTS.index(t) if t in TIME_SLOTS else 99
 
-def load_csv(file):
-    df = pd.read_csv(file, sep=';', skiprows=12, header=0)
+SHAREPOINT_URL = "https://telkomuniversityofficial-my.sharepoint.com/:x:/g/personal/informaticslab_telkomuniversity_ac_id/IQCu0J7xWqURRqvaazezpjXeAchkSmvqSwCFYp8UcCnQiog?download=1"
+
+def show_rt_status(dot_color: str, label: str, detail: str = ""):
+    """Inject a bottom-left realtime status overlay."""
+    det = f"<br><span style='color:#3D4A7A;font-size:10px;'>{html_lib.escape(detail)}</span>" if detail else ""
+    st.markdown(
+        f"""<div class="rt-status">
+              <div class="rt-dot {dot_color}"></div>
+              <div class="rt-text"><b>{html_lib.escape(label)}</b>{det}</div>
+            </div>""",
+        unsafe_allow_html=True,
+    )
+
+@st.cache_data(ttl=600)
+def load_data_from_url():
+    """Download Excel dari SharePoint menggunakan Cookie dari Streamlit Secrets."""
+    try:
+        cookie = st.secrets["SHAREPOINT_COOKIE"]
+    except Exception:
+        return None, "SHAREPOINT_COOKIE belum diset di Streamlit Secrets!"
+
+    headers = {
+        "Cookie": cookie,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/octet-stream,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*",
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://telkomuniversityofficial-my.sharepoint.com/",
+    }
+
+    response = requests.get(SHAREPOINT_URL, headers=headers, timeout=30, allow_redirects=True)
+
+    if response.status_code != 200:
+        return None, f"HTTP {response.status_code} — Cookie mungkin expired, update di Secrets!"
+
+    content_type = response.headers.get("Content-Type", "")
+    if "html" in content_type.lower():
+        return None, "SharePoint mengembalikan halaman HTML (bukan file). Cookie expired atau salah."
+
+    df = pd.read_excel(io.BytesIO(response.content), skiprows=12)
     df.columns = df.columns.str.strip()
     df = df[df['Tanggal'].notna() & (df['Tanggal'].astype(str).str.strip() != '')].copy()
     for col in ['NIM (Pengawas 1)', 'NIM (Pengawas 2)', 'NIM (Pengawas 3)']:
         df[col] = df[col].astype(str).str.strip().str.lstrip('`').str.upper()
-        df[col] = df[col].replace({'NAN':'','NONE':''})
-    return df
+        df[col] = df[col].replace({'NAN': '', 'NONE': ''})
+    return df, None
 
 def search_nim(df, nim):
     nim = nim.strip().upper()
@@ -427,6 +500,7 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
 for key, val in [
     ('ext_agendas', []),
     ('df', None),
+    ('data_error', None),
     ('result', None),
     ('nim_searched', ''),
     ('proctor_name', ''),
@@ -445,14 +519,47 @@ with st.sidebar:
         <span style='font-size:10px;color:#3D4A7A;letter-spacing:.1em;'>UTS SCHEDULE LOOKUP</span>
     </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="slabel">📂 Data Source</div>', unsafe_allow_html=True)
-    uploaded = st.file_uploader("Upload CSV", type=['csv'], label_visibility='collapsed')
-    if uploaded:
-        try:
-            st.session_state.df = load_csv(uploaded)
-            st.success(f"✅ {len(st.session_state.df)} baris dimuat")
-        except Exception as ex:
-            st.error(f"Gagal membaca CSV: {ex}")
+    # ── Auto-load data from SharePoint ──────────────────────────────────────
+    st.markdown('<div class="slabel">📡 Data Source</div>', unsafe_allow_html=True)
+
+    if st.session_state.df is None and st.session_state.data_error is None:
+        # First load — fetch from SharePoint
+        show_rt_status("blue", "Menghubungi server…", "Mengambil file dari SharePoint")
+        with st.spinner(""):
+            try:
+                df_fetched, err = load_data_from_url()
+                if err:
+                    st.session_state.data_error = err
+                else:
+                    st.session_state.df = df_fetched
+            except Exception as ex:
+                st.session_state.data_error = str(ex)
+        st.rerun()
+
+    if st.session_state.data_error:
+        show_rt_status("red", "Gagal memuat data", st.session_state.data_error)
+        st.error(f"❌ Gagal memuat data: {st.session_state.data_error}")
+        if st.button("🔄 Coba Lagi", use_container_width=True):
+            load_data_from_url.clear()
+            st.session_state.data_error = None
+            st.session_state.df = None
+            st.rerun()
+    elif st.session_state.df is not None:
+        n = len(st.session_state.df)
+        show_rt_status("green", "Data siap", f"{n} baris dimuat · cache 10 menit")
+        st.markdown(
+            f"<div style='font-size:11px;color:#2A9D8F;margin-bottom:8px;'>✅ <b>{n}</b> baris dimuat dari SharePoint</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            load_data_from_url.clear()
+            st.session_state.df = None
+            st.session_state.data_error = None
+            st.session_state.result = None
+            st.rerun()
+    else:
+        show_rt_status("yellow", "Memuat data…", "Harap tunggu")
+
 
     st.markdown('<div class="slabel">🔍 Cari NIM Pengawas</div>', unsafe_allow_html=True)
     nim_input  = st.text_input("NIM", placeholder="cth: 1302223029", label_visibility='collapsed')
@@ -460,7 +567,7 @@ with st.sidebar:
 
     if search_btn:
         if st.session_state.df is None:
-            st.error("Upload CSV terlebih dahulu.")
+            st.error("Data belum dimuat. Tunggu sebentar atau klik Refresh Data.")
         elif not nim_input.strip():
             st.warning("Masukkan NIM.")
         else:
@@ -542,13 +649,16 @@ if result is None or result.empty:
                 f'<div style="color:#3D4A7A;margin-top:8px;">NIM <code style="color:#4F6EF7">{e(nim)}</code> tidak ada dalam data.</div>')
     else:
         body = ('<div style="font-family:Syne;font-size:22px;font-weight:700;color:#E8ECF8;">ProctorView</div>'
-                '<div style="color:#3D4A7A;margin-top:10px;">Upload CSV &amp; masukkan NIM untuk melihat jadwal pengawasan.</div>'
-                '<div style="color:#1C2040;margin-top:28px;font-size:12px;">← Gunakan panel kiri untuk memulai</div>')
+                '<div style="color:#3D4A7A;margin-top:10px;">Masukkan NIM untuk melihat jadwal pengawasan.</div>'
+                '<div style="color:#1C2040;margin-top:28px;font-size:12px;">← Cari NIM di panel kiri</div>')
     st.markdown(f'<div style="text-align:center;padding:80px 0;"><div style="font-size:44px;margin-bottom:16px;">🎓</div>{body}</div>', unsafe_allow_html=True)
     st.stop()
 
 # ── Conflicts ─────────────────────────────────────────────────────────────────
 conflicts = detect_conflicts(result, ext)
+
+# ── Realtime status overlay ───────────────────────────────────────────────────
+show_rt_status("green", "Data aktif", f"{len(st.session_state.df)} baris · cache 10 menit")
 
 # ── Hero ─────────────────────────────────────────────────────────────────────
 cp = f'<span class="conf-pill">⚠️ {len(conflicts)} KONFLIK</span>' if conflicts else ''

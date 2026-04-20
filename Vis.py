@@ -282,11 +282,11 @@ TIME_RANGES = {
 }
 
 SLOT_STYLE = {
-    '08.00 - 10.15 WIB': ('#4F6EF7', '#0E1228'),
-    '10.45 - 13.00 WIB': ('#F4A261', '#1A1208'),
+    '08.00 - 10.15 WIB': ('#4A9FFF', '#0E1228'),
+    '10.45 - 13.00 WIB': ('#FF8C3D', '#1A1208'),
     '13.00 - 15.00 WIB': ('#2A9D8F', '#0B1A18'),
     '13.30 - Selesai':   ('#8338EC', '#130E20'),
-    '14.00 - 16.15 WIB': ('#E9C46A', '#1A1808'),
+    '14.00 - 16.15 WIB': ('#FFB81D', '#1A1808'),
     '18.30 - 20.30 WIB': ('#E63946', '#1A080A'),
 }
 DEFAULT_STYLE = ('#4F6EF7', '#0E1228')
@@ -833,7 +833,9 @@ st.markdown(f"""
 # ── Metrics ───────────────────────────────────────────────────────────────────
 m1,m2,m3,m4 = st.columns(4)
 with m1: st.markdown(f'<div class="mcard"><div class="mnum">{len(result)}</div><div class="mlbl">Total Sesi</div></div>', unsafe_allow_html=True)
-with m2: st.markdown(f'<div class="mcard"><div class="mnum">{result["Tanggal"].nunique()}</div><div class="mlbl">Hari Aktif</div></div>', unsafe_allow_html=True)
+total_salary = (len(result) * 30)
+salary_display = f"{total_salary // 1000 if total_salary >= 1000 else total_salary}"
+with m2: st.markdown(f'<div class="mcard"><div class="mnum" style="background:linear-gradient(135deg,#2A9D8F,#26D0CE);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">{salary_display}</div><div class="mlbl">Honor</div></div>', unsafe_allow_html=True)
 with m3: st.markdown(f'<div class="mcard"><div class="mnum">{len(ext)}</div><div class="mlbl">Agenda Eksternal</div></div>', unsafe_allow_html=True)
 with m4:
     rcls = ' mnum-red' if conflicts else ''

@@ -84,10 +84,32 @@ hr { border-color:#1C2040 !important; }
 .nim-pill   { background:#4F6EF7; color:#fff; border-radius:20px; padding:3px 14px; font-size:11px; font-weight:700; display:inline-block; }
 .conf-pill  { background:#E63946; color:#fff; border-radius:20px; padding:3px 12px; font-size:11px; font-weight:700; display:inline-block; margin-left:8px; }
 
-.lcard { background:#12152A; border:1px solid #1C2040; border-left:4px solid var(--ac,#4F6EF7); border-radius:11px; padding:13px 16px; margin-bottom:9px; }
+.lcard { background:#12152A; border:1px solid #1C2040; border-left:4px solid var(--ac,#4F6EF7); border-radius:11px; padding:13px 16px 28px; margin-bottom:9px; position: relative; }
 .lcard-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#E8ECF8; }
 .lcard-meta  { font-size:11px; color:#3D4A7A; margin-top:6px; }
 .badge { display:inline-block; background:#1C2040; color:#A78BFA; border-radius:5px; padding:2px 7px; font-size:10px; font-weight:600; margin-right:5px; }
+.row-pill {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #9BC3FF;
+    border: none;
+    padding: 0;
+    font-size: 7px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: .12em;
+    white-space: nowrap;
+    min-width: 0;
+    text-align: right;
+    text-shadow: 0 0 4px rgba(118, 156, 255, 0.22);
+    pointer-events: none;
+}
+.c-exam { padding-bottom: 44px; }
 .ext-lcard { background:#0E1A18; border:1px solid #1A3530; border-left:4px solid #2A9D8F; border-radius:11px; padding:13px 16px; margin-bottom:9px; }
 
 /* ─── REALTIME STATUS ─── */
@@ -596,13 +618,17 @@ def build_calendar_html(schedule_df, ext_agendas, conflicts):
                 is_c = (date_norm, slot) in conflict_exam_keys
                 cf   = ' conflict' if is_c else ''
                 ct   = '<div class="c-conf-tag">⚠ KONFLIK</div>' if is_c else ''
+                row_badge = ''
+                if row_v in {'1st', '2nd'}:
+                    row_badge = f'<span class="row-pill">{row_v}</span>'
                 items.append(
                     f'<div class="c-exam{cf}" style="--ac:{accent};--bg:{bg};">'
                     f'{ct}'
                     f'<div class="c-exam-mk">{mk}</div>'
                     f'<div class="c-exam-room">🏛 {room}</div>'
-                    f'<div class="c-exam-kls">👥 {kelas} &nbsp;· 🔢 ROW: {row_v}</div>'
+                    f'<div class="c-exam-kls">👥 {kelas}</div>'
                     f'<div class="c-exam-type">{jenis}</div>'
+                    f'{row_badge}'
                     f'</div>'
                 )
 
@@ -890,18 +916,23 @@ for date in dates:
                     '</div>'
                 )
 
-            st.markdown(f"""
-            <div class="lcard" style="--ac:{ac}">
-                <div class="lcard-title">{e(subj)}{ct}</div>
-                <div class="lcard-meta">
-                    <span class="badge">⏰ {e(slot)}</span>
-                    <span class="badge">🏛 {e(room)}</span>
-                    <span class="badge">👥 {e(kelas)}</span>
-                    <span class="badge" style="color:#F4A261">🔢 ROW: {e(row_label)}</span>
-                    <span class="badge">{e(jenis)}</span>
-                </div>
-                {rekan_html}
-            </div>""", unsafe_allow_html=True)
+            row_badge_html = ''
+            if row_label in {'1st', '2nd'}:
+                row_badge_html = f'<span class="row-pill">{e(row_label)}</span>'
+            html = (
+                f'<div class="lcard" style="--ac:{ac}">' 
+                f'<div class="lcard-title">{e(subj)}{ct}</div>'
+                f'<div class="lcard-meta">'
+                f'<span class="badge">⏰ {e(slot)}</span>'
+                f'<span class="badge">🏛 {e(room)}</span>'
+                f'<span class="badge">👥 {e(kelas)}</span>'
+                f'<span class="badge">{e(jenis)}</span>'
+                f'</div>'
+                f'{rekan_html}'
+                f'{row_badge_html}'
+                f'</div>'
+            )
+            st.markdown(html, unsafe_allow_html=True)
 
         if dex:
             st.markdown('<div style="color:#3D4A7A;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin:14px 0 6px;">📌 Agenda Eksternal</div>', unsafe_allow_html=True)

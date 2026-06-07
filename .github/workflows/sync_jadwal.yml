@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0   # perlu history agar `git log -- data/` bekerja
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,22 +39,42 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas openpyxl
 
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       # Step 1: Download file dari SharePoint → data/jadwal.csv
       - name: Download jadwal dari SharePoint
         run: python scripts/fetch_jadwal.py
         env:
           SHAREPOINT_URL: ${{ secrets.SHAREPOINT_URL }}
 
-      # Step 2: Konversi CSV → docs/data.js untuk GitHub Pages
+      # Step 2: Commit data DULU agar `git log -- data/` di langkah berikutnya
+      # mengembalikan timestamp commit yang akurat (akan dipakai LAST_UPDATE_RAW).
+      - name: Commit data jika berubah
+        id: commit_data
+        run: |
+          git add -f data/jadwal.csv data/last_updated.txt
+          if git diff --staged --quiet; then
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Tidak ada perubahan data — skip commit data."
+          else
+            git commit -m "chore: sync data $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Step 3: Konversi CSV → docs/data.js (memakai git log dari folder data/)
       - name: Generate data.js untuk frontend
         run: python scripts/generate_data_js.py
 
-      # Step 3: Commit semua hasil
-      - name: Commit hasil sync
+      # Step 4: Commit data.js dan push semua
+      - name: Commit data.js dan push
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Force-add agar tidak diblokir .gitignore
-          git add -f data/jadwal.csv data/last_updated.txt docs/data.js
-          git diff --staged --quiet || git commit -m "chore: sync jadwal $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push
+          git add -f docs/data.js
+          if git diff --staged --quiet && [ "${{ steps.commit_data.outputs.no_changes }}" = "true" ]; then
+            echo "Tidak ada perubahan untuk dipush."
+          else
+            git diff --staged --quiet || git commit -m "chore: regenerate data.js $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi

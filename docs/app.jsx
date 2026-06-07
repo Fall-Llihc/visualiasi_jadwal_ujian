@@ -1,12 +1,11 @@
-/* app.jsx — Root App component */
+/* app.jsx — Root App component (read-only user view) */
 const { useState, useEffect, useCallback } = React;
 
 function App() {
-  const [tab, setTab] = useState('jadwal');
   const [nim, setNim] = useState('');
   const [searchError, setSearchError] = useState('');
   const [proctor, setProctor] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(window.LAST_UPDATE_RAW || '');
   const [agendas, setAgendas] = useState(() => {
     try { return JSON.parse(localStorage.getItem('vj_agendas') || '[]'); }
     catch { return []; }
@@ -26,6 +25,16 @@ function App() {
     }
   }, []);
 
+  // Refresh waktu commit terakhir folder /data via GitHub API.
+  // Kalau gagal, tetap pakai LAST_UPDATE_RAW yang sudah di-embed di data.js.
+  useEffect(() => {
+    if (typeof window.fetchLatestCommitTime === 'function') {
+      window.fetchLatestCommitTime(function (raw) {
+        if (raw) setLastUpdate(raw);
+      });
+    }
+  }, []);
+
   const handleSearch = useCallback(() => {
     setSearchError('');
     var v = nim.trim();
@@ -39,24 +48,19 @@ function App() {
 
   function addAgenda(ag) { setAgendas(prev => [...prev, ag]); }
   function removeAgenda(id) { setAgendas(prev => prev.filter(a => a.id !== id)); }
-  function handleReset() { setAgendas([]); setProctor(null); setNim(''); localStorage.removeItem('vj_last_nim'); }
 
   return (
     <div className="app-layout">
       <Sidebar
-        activeTab={tab}
-        onTabChange={setTab}
         nimValue={nim}
         onNimChange={v => { setNim(v); setSearchError(''); }}
         onSearch={handleSearch}
         searchError={searchError}
-        isAdmin={isAdmin}
-        onLogin={() => setIsAdmin(true)}
-        onLogout={() => setIsAdmin(false)}
-        onReset={handleReset}
         agendas={agendas}
         onAddAgenda={addAgenda}
         onRemoveAgenda={removeAgenda}
+        lastUpdate={lastUpdate}
+        dataRows={window.DATA_ROWS || 0}
       />
       <main className="main-content">
         {proctor ? <ScheduleView proctor={proctor} agendas={agendas} /> : <EmptyState />}

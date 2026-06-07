@@ -48,6 +48,18 @@ BULAN_STR_TO_NUM = {
 }
 
 
+def is_international(kelas: str) -> bool:
+    """True kalau ada token 'INT' di nama kelas (kelas internasional → honor 2×).
+
+    Pakai split per separator agar 'INT' jadi token utuh. Cocok untuk bentuk
+    'IF-49-INT', 'INT-48-01', 'CS_50_INT', dst — TIDAK match 'INTRO'/'INTERNAL'.
+    """
+    if not kelas:
+        return False
+    parts = re.split(r"[-_\s/]+", str(kelas).strip().upper())
+    return "INT" in parts
+
+
 def normalize_nim(v: str) -> str:
     s = str(v).strip()
     if s.upper() in {"NAN", "NONE", ""}:
@@ -262,6 +274,8 @@ for row in rows:
             entry["partner"] = ", ".join(partner_labels)
         if section_info is not None:
             entry["section"] = section_info
+        if is_international(kelas):
+            entry["intl"] = True
 
         proctors[nim]["schedule"].append(entry)
         uid += 1
@@ -345,6 +359,11 @@ js_content = f"""// data.js — AUTO-GENERATED oleh GitHub Actions. JANGAN EDIT 
   }};
 
   window.HONOR_PER_SESSION = 30000;
+  // Multiplier honor untuk kelas internasional (kelas dgn token 'INT', mis. IF-49-INT).
+  window.HONOR_INT_MULTIPLIER = 2;
+  window.honorOf = function (entry) {{
+    return window.HONOR_PER_SESSION * (entry && entry.intl ? window.HONOR_INT_MULTIPLIER : 1);
+  }};
 
   window.PROCTOR_DB = {proctor_db_json};
 
@@ -389,7 +408,9 @@ js_content = f"""// data.js — AUTO-GENERATED oleh GitHub Actions. JANGAN EDIT 
 
   // Hitung breakdown honor dengan memperhitungkan konflik:
   //  - Internal conflict: 2+ jadwal di slot (date,session) yang sama → pengawas
-  //    cuma bisa hadir 1, sisanya hangus (lost = N - 1)
+  //    cuma bisa hadir 1, sisanya hangus (lost = N - 1). Bila honor entry
+  //    berbeda (mis. ada kelas INT), pilih entry dgn honor TERTINGGI sebagai
+  //    yang dihadiri (asumsi rasional → kelas yg lebih besar honornya).
   //  - Agenda eksternal yg overlap waktu dengan suatu slot → pengawas tidak bisa
   //    hadir di slot itu sama sekali, jadi semua N entry slot itu hangus.
   window.computeHonorBreakdown = function (schedule, agendas) {{
@@ -400,15 +421,26 @@ js_content = f"""// data.js — AUTO-GENERATED oleh GitHub Actions. JANGAN EDIT 
       slots[k].entries.push(s);
     }});
 
-    var attended = 0;
-    var lostInternal = 0;
-    var lostAgenda   = 0;
+    var attended      = 0;
+    var lostInternal  = 0;
+    var lostAgenda    = 0;
     var conflictSlots = 0;
+    var honorGross    = 0;
+    var honorNet      = 0;
+    var honorLost     = 0;
+    var intlAttended  = 0;
+    var intlTotal     = 0;
     var agendaList = Array.isArray(agendas) ? agendas : [];
+
+    schedule.forEach(function (s) {{
+      honorGross += window.honorOf(s);
+      if (s.intl) intlTotal += 1;
+    }});
 
     Object.keys(slots).forEach(function (k) {{
       var slot = slots[k];
-      var n = slot.entries.length;
+      var entries = slot.entries;
+      var n = entries.length;
 
       var hasAgendaConflict = false;
       for (var i = 0; i < agendaList.length; i++) {{
@@ -423,31 +455,40 @@ js_content = f"""// data.js — AUTO-GENERATED oleh GitHub Actions. JANGAN EDIT 
       }}
 
       if (hasAgendaConflict) {{
-        // Tidak bisa hadir di slot ini sama sekali
         lostAgenda += n;
+        entries.forEach(function (e) {{ honorLost += window.honorOf(e); }});
       }} else if (n > 1) {{
-        // Internal conflict: hadir 1, sisanya hangus
+        // Pilih entry dgn honor tertinggi sebagai yang dihadiri (kelas INT > regular).
+        var sorted = entries.slice().sort(function (a, b) {{
+          return window.honorOf(b) - window.honorOf(a);
+        }});
         attended      += 1;
+        honorNet      += window.honorOf(sorted[0]);
+        if (sorted[0].intl) intlAttended += 1;
+        for (var j = 1; j < sorted.length; j++) {{
+          honorLost += window.honorOf(sorted[j]);
+        }}
         lostInternal  += n - 1;
         conflictSlots += 1;
       }} else {{
         attended += 1;
+        honorNet += window.honorOf(entries[0]);
+        if (entries[0].intl) intlAttended += 1;
       }}
     }});
 
-    var total = schedule.length;
-    var lostTotal = lostInternal + lostAgenda;
-    var perSesi = window.HONOR_PER_SESSION;
     return {{
-      total:           total,
+      total:           schedule.length,
       attended:        attended,
       lostInternal:    lostInternal,
       lostAgenda:      lostAgenda,
-      lostTotal:       lostTotal,
+      lostTotal:       lostInternal + lostAgenda,
       conflictSlots:   conflictSlots,
-      honorGross:      total    * perSesi,
-      honorNet:        attended * perSesi,
-      honorLost:       lostTotal * perSesi,
+      honorGross:      honorGross,
+      honorNet:        honorNet,
+      honorLost:       honorLost,
+      intlAttended:    intlAttended,
+      intlTotal:       intlTotal,
     }};
   }};
 

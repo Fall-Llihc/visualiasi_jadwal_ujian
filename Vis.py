@@ -260,34 +260,90 @@ def fetch_data_commit_info(_dummy: int = 0):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATA — download + parse
+# DATA — download + parse (auto-detect header row → tahan perubahan layout)
 # ─────────────────────────────────────────────────────────────────────────────
+_HEADER_TOKENS = ("tanggal", "jam")
+_MAX_HEADER_SCAN_ROWS = 50
+
+
+def _row_is_header(row_values) -> bool:
+    flat = " | ".join(str(v).strip().lower() for v in row_values if v is not None)
+    return all(tok in flat for tok in _HEADER_TOKENS)
+
+
+def _detect_header_row(df_no_header: pd.DataFrame):
+    limit = min(len(df_no_header), _MAX_HEADER_SCAN_ROWS)
+    for i in range(limit):
+        if _row_is_header(df_no_header.iloc[i].tolist()):
+            return i
+    return None
+
+
 def _robust_parse(content_bytes: bytes):
+    """Auto-detect header row di XLSX/CSV — robust terhadap perubahan layout sumber."""
+    # XLSX
     if content_bytes[:4] == b'PK\x03\x04':
         try:
-            df = pd.read_excel(io.BytesIO(content_bytes), skiprows=12, dtype=str)
-            if "Tanggal" in df.columns and len(df) > 0:
-                return df, None
-        except Exception:
-            pass
+            xl = pd.ExcelFile(io.BytesIO(content_bytes), engine="openpyxl")
+            for sheet in xl.sheet_names:
+                try:
+                    raw = pd.read_excel(
+                        io.BytesIO(content_bytes), sheet_name=sheet,
+                        header=None, dtype=str, engine="openpyxl",
+                    )
+                except Exception:
+                    continue
+                hdr = _detect_header_row(raw)
+                if hdr is None:
+                    continue
+                df = pd.read_excel(
+                    io.BytesIO(content_bytes), sheet_name=sheet,
+                    header=hdr, dtype=str, engine="openpyxl",
+                )
+                df.columns = [str(c).strip() for c in df.columns]
+                df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+                df = df.loc[:, df.columns != ""]
+                if "Tanggal" in df.columns and len(df) > 0:
+                    return df, None
+        except Exception as ex:
+            return None, f"Gagal parse XLSX: {ex}"
+        return None, "Header 'Tanggal'+'Jam' tidak ditemukan di XLSX."
 
+    # CSV — coba beberapa encoding & separator
     last_err = "unknown"
-    for enc, data in [
-        ("utf-8-sig", content_bytes),
-        ("utf-8",     content_bytes),
-        ("latin-1",   content_bytes),
-        ("utf-8",     content_bytes.replace(b"\x00", b"")),
-    ]:
+    for enc in ("utf-8-sig", "utf-8", "latin-1"):
         try:
-            text = data.decode(enc, errors="replace")
-            df = pd.read_csv(
-                io.StringIO(text), sep=";", skiprows=12,
-                dtype=str, on_bad_lines="skip", engine="python",
-            )
-            if "Tanggal" in df.columns and len(df) > 0:
-                return df, None
+            text = content_bytes.decode(enc, errors="replace")
         except Exception as ex:
             last_err = str(ex)
+            continue
+        for sep in (";", ",", "\t"):
+            try:
+                raw = pd.read_csv(
+                    io.StringIO(text), sep=sep, header=None, dtype=str,
+                    engine="python", on_bad_lines="skip",
+                )
+            except Exception as ex:
+                last_err = str(ex)
+                continue
+            if raw.empty or raw.shape[1] < 3:
+                continue
+            hdr = _detect_header_row(raw)
+            if hdr is None:
+                continue
+            try:
+                df = pd.read_csv(
+                    io.StringIO(text), sep=sep, skiprows=hdr, dtype=str,
+                    engine="python", on_bad_lines="skip",
+                )
+            except Exception as ex:
+                last_err = str(ex)
+                continue
+            df.columns = [str(c).strip() for c in df.columns]
+            df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
+            df = df.loc[:, df.columns != ""]
+            if "Tanggal" in df.columns and len(df) > 0:
+                return df, None
     return None, f"Gagal parse file: {last_err}"
 
 

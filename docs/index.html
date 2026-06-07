@@ -17,9 +17,11 @@
     ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
     /* ── layout ── */
-    .app-layout{display:flex;width:100%;height:100vh}
+    html,body{width:100%;height:100%}
+    .app-layout{display:flex;width:100vw;height:100vh}
     .sidebar{width:280px;min-width:280px;background:var(--bg-sidebar);display:flex;flex-direction:column;border-right:1px solid var(--border);height:100vh}
-    .main-content{flex:1;overflow-y:auto;padding:36px 40px 60px}
+    .main-content{flex:1 1 auto;min-width:0;overflow-y:auto;padding:32px 36px 60px}
+    .main-view{width:100%;max-width:none}
 
     /* ── sidebar brand ── */
     .sb-brand{padding:24px 20px 16px;border-bottom:1px solid var(--border)}
@@ -134,8 +136,10 @@
     .day-conflict-badge{font-size:10px;font-weight:700;color:var(--danger);background:rgba(224,96,96,.12);padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px}
 
     /* ── cards container ── */
-    .day-cards{padding:0 14px 14px;display:flex;flex-direction:column;gap:8px}
+    .day-cards{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
     .session-group{display:flex;flex-direction:column;gap:8px}
+    /* Cards di dalam tiap sesi: grid auto-fit 2-3 kolom pada layar lebar */
+    .session-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px}
 
     /* ── schedule card ── */
     .scard{background:rgba(255,255,255,.03);border-radius:10px;padding:14px 16px;border-left:3px solid var(--border);transition:background .15s}
@@ -150,6 +154,12 @@
     .scard-meta-item{background:rgba(255,255,255,.05);padding:2px 8px;border-radius:4px}
     .scard-meta-sep{color:var(--text3)}
     .scard-partner{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--lav);margin-top:8px;padding-top:6px;border-top:1px solid rgba(68,68,68,.4)}
+
+    /* ── section split badge (kelas dipecah ke beberapa ruangan) ── */
+    .scard-section{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+    .section-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;background:rgba(255,193,204,.18);color:var(--pink);padding:3px 9px;border-radius:8px;letter-spacing:.3px}
+    .section-pos{font-size:10px;color:var(--text3);font-weight:600}
+    .section-rooms{font-size:10px;color:var(--text3)}
 
     /* ── conflict alert ── */
     .conflict-alert{display:flex;align-items:flex-start;gap:8px;background:rgba(224,96,96,.08);border:1px solid rgba(224,96,96,.18);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--danger);line-height:1.4}
@@ -167,6 +177,10 @@
       .main-content{padding:24px 20px 40px}
       .stats-row{grid-template-columns:repeat(2,1fr)}
       .mv-name{font-size:24px}
+      .session-cards{grid-template-columns:1fr}
+    }
+    @media(min-width:1600px){
+      .main-content{padding:40px 56px 80px}
     }
   </style>
 </head>

@@ -413,9 +413,10 @@ for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Auto-refresh check (non-blocking)
+# Auto-refresh check (non-blocking) — hanya jalan kalau toggle Auto-Update aktif
 _now = time.time()
-if (st.session_state.df is not None and
+if (st.session_state.auto_update_enabled and
+    st.session_state.df is not None and
     (_now - st.session_state.last_auto_fetch) >= st.session_state.interval_min * 60):
     _load_from_github.clear()
     _get_last_updated_txt.clear()
@@ -511,6 +512,40 @@ with st.sidebar:
             icon = "✅" if st.session_state.admin_msg_ok else "❌"
             st.markdown(
                 f"<div class='{cls}'>{icon} {e(st.session_state.admin_msg)}</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Auto-Update toggle ───────────────────────────────────────────
+        st.markdown("<div class='sb-section'>", unsafe_allow_html=True)
+        st.markdown("<p class='sb-section-title'>🔄 Auto-Update</p>", unsafe_allow_html=True)
+        st.markdown(
+            "<p class='sb-hint'>Aktifkan untuk otomatis pull data dari GitHub setiap "
+            "<b>interval</b> di bawah. Matikan kalau tidak ingin selalu auto-pull "
+            "(termasuk auto-trigger ke GitHub Actions tetap manual).</p>",
+            unsafe_allow_html=True,
+        )
+        prev_auto = st.session_state.auto_update_enabled
+        st.session_state.auto_update_enabled = st.toggle(
+            "Auto-update aktif",
+            value=prev_auto,
+            key="auto_update_toggle",
+        )
+        # Reset timer kalau baru saja diubah dari off → on agar tidak langsung fetch
+        if (not prev_auto) and st.session_state.auto_update_enabled:
+            st.session_state.last_auto_fetch = time.time()
+
+        if st.session_state.auto_update_enabled:
+            st.markdown(
+                "<p style='font-size:11px;color:#6BCB77;text-align:center;margin-top:4px;'>"
+                "🟢 Auto-pull aktif — refresh tiap "
+                f"<b>{st.session_state.interval_min} mnt</b></p>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<p style='font-size:11px;color:#e06060;text-align:center;margin-top:4px;'>"
+                "⚪ Auto-pull <b>nonaktif</b> — pull data hanya saat tombol di atas ditekan</p>",
                 unsafe_allow_html=True,
             )
         st.markdown("</div>", unsafe_allow_html=True)
@@ -681,13 +716,15 @@ if df_now is not None:
 elapsed = time.time() - st.session_state.last_auto_fetch
 remain  = max(0, st.session_state.interval_min * 60 - elapsed)
 rm, rs  = int(remain // 60), int(remain % 60)
+auto_label = f"{rm}m {rs}s" if st.session_state.auto_update_enabled else "Nonaktif"
+auto_color = '#A8DADC' if st.session_state.auto_update_enabled else '#e06060'
 
 st.markdown(
     f"<div class='stats-row'>"
     f"<div class='stat-box'><p class='stat-value' style='color:#A8DADC'>{n_rows}</p><p class='stat-label'>Baris Data</p></div>"
     f"<div class='stat-box'><p class='stat-value' style='color:#FFC1CC'>{n_pengawas}</p><p class='stat-label'>Pengawas Unik</p></div>"
     f"<div class='stat-box'><p class='stat-value' style='color:#B39CD0'>{n_dates}</p><p class='stat-label'>Tanggal Ujian</p></div>"
-    f"<div class='stat-box'><p class='stat-value'>{rm}m {rs}s</p><p class='stat-label'>Auto-refresh</p></div>"
+    f"<div class='stat-box'><p class='stat-value' style='color:{auto_color}'>{auto_label}</p><p class='stat-label'>Auto-refresh</p></div>"
     f"</div>",
     unsafe_allow_html=True,
 )

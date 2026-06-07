@@ -55,7 +55,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/jadwal.csv data/last_updated.txt
+          # Force-add agar tidak diblokir .gitignore
+          git add -f data/jadwal.csv data/last_updated.txt
           # Hanya commit kalau ada perubahan
           git diff --staged --quiet || git commit -m "chore: sync jadwal $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push

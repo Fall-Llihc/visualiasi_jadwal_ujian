@@ -161,6 +161,40 @@ proctors = {}   # nim → {name, nim, schedule:[]}
 uid      = 1
 skipped_slot = 0
 
+# Pass 1: bangun lookup ruangan untuk mendeteksi kelas yang dipecah ke beberapa
+# ruangan (split section). Key = (date_iso, jam, course, kelas).
+split_lookup: dict = {}
+for row in rows:
+    tanggal_raw = str(row.get("Tanggal", "")).strip()
+    jam_raw     = str(row.get("Jam", "")).strip()
+    if not tanggal_raw or not jam_raw:
+        continue
+    jam_n = normalize_jam(jam_raw)
+    if jam_n not in SLOT_TO_SESSION:
+        continue
+    key = (
+        to_iso_date(tanggal_raw),
+        jam_n,
+        str(row.get("Nama MK", "") or "").strip().upper(),
+        str(row.get("Kelas",   "") or "").strip().upper(),
+    )
+    room = str(row.get("Ruangan", "") or "").strip()
+    if not room:
+        continue
+    if key not in split_lookup:
+        split_lookup[key] = []
+    if room not in split_lookup[key]:
+        split_lookup[key].append(room)
+
+# Urutkan supaya nomor section konsisten di tiap reload
+for k in split_lookup:
+    split_lookup[k].sort()
+
+split_kelas_count = sum(1 for v in split_lookup.values() if len(v) > 1)
+print(f"Split-kelas terdeteksi: {split_kelas_count} kombinasi (date+jam+MK+kelas)")
+
+# Pass 2: bangun PROCTOR_DB sambil isi info section bila kelasnya dipecah
+
 for row in rows:
     tanggal_raw = str(row.get("Tanggal", "")).strip()
     jam_raw     = str(row.get("Jam", "")).strip()
@@ -180,6 +214,17 @@ for row in rows:
     room     = str(row.get("Ruangan",    "") or "").strip()
     kelas    = str(row.get("Kelas",      "") or "").strip()
     jenis    = str(row.get("Jenis Ujian","") or "").strip()
+
+    # Cek apakah kombinasi (date, jam, MK, kelas) ini dipecah ke beberapa ruangan.
+    split_key   = (date_iso, jam, course.upper(), kelas.upper())
+    split_rooms = split_lookup.get(split_key, [])
+    section_info = None
+    if len(split_rooms) > 1 and room in split_rooms:
+        section_info = {
+            "index": split_rooms.index(room) + 1,
+            "total": len(split_rooms),
+            "rooms": split_rooms,
+        }
 
     for i in ["1", "2", "3"]:
         nim  = normalize_nim(str(row.get(f"NIM (Pengawas {i})", "") or ""))
@@ -215,6 +260,8 @@ for row in rows:
         }
         if partner_labels:
             entry["partner"] = ", ".join(partner_labels)
+        if section_info is not None:
+            entry["section"] = section_info
 
         proctors[nim]["schedule"].append(entry)
         uid += 1

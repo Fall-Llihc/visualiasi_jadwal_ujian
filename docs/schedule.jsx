@@ -31,6 +31,11 @@ function RoleBadge({role}) {
 function ScheduleCard({item, conflict}) {
   var ses = SESSIONS[item.session];
   var borderColor = conflict ? '#e06060' : ses.color;
+  // Section info hanya muncul kalau kelas-nya benar-benar dipecah
+  // ke >1 ruangan pada (tanggal, jam, MK, kelas) yang sama.
+  var sec = item.section;
+  var posLabel = '';
+  if (sec && sec.total === 2) posLabel = sec.index === 1 ? '(Atas)' : '(Bawah)';
   return (
     <div className="scard" style={{borderLeftColor: borderColor}}>
       <div className="scard-top">
@@ -39,6 +44,13 @@ function ScheduleCard({item, conflict}) {
         </span>
         <RoleBadge role={item.role} />
       </div>
+      {sec && (
+        <div className="scard-section" title={'Kelas dipecah ke: ' + sec.rooms.join(', ')}>
+          <span className="section-badge">Section {sec.index} dari {sec.total}</span>
+          {posLabel && <span className="section-pos">{posLabel}</span>}
+          <span className="section-rooms">· kelas dipecah ke {sec.rooms.length} ruangan</span>
+        </div>
+      )}
       <h3 className="scard-course">{item.course}</h3>
       <p className="scard-room"><IconPin /> {item.code}</p>
       <div className="scard-meta">
@@ -122,9 +134,11 @@ function DaySection({date, items, allSchedule, dayAgendas}) {
             return (
               <div key={sn} className="session-group">
                 {conflict && <ConflictAlert count={sessItems.length} />}
-                {sessItems.map(item => (
-                  <ScheduleCard key={item.id} item={item} conflict={conflict} />
-                ))}
+                <div className="session-cards">
+                  {sessItems.map(item => (
+                    <ScheduleCard key={item.id} item={item} conflict={conflict} />
+                  ))}
+                </div>
               </div>
             );
           })}

@@ -1,13 +1,9 @@
 name: Sync Jadwal dari SharePoint
 
 on:
-  # ── Jadwal otomatis — default tiap 1 jam ──────────────────────────────────
-  # Ganti angka pertama (0) ke menit yang diinginkan, misal */30 = tiap 30 menit
-  # Catatan: GitHub Actions minimum interval = 5 menit
   schedule:
-    - cron: '0 * * * *'   # tiap jam tepat (ubah sesuai kebutuhan)
+    - cron: '0 * * * *'   # tiap jam — ubah sesuai kebutuhan
 
-  # ── Trigger manual dari GitHub UI atau via API (untuk tombol admin) ────────
   workflow_dispatch:
     inputs:
       reason:
@@ -15,48 +11,49 @@ on:
         required: false
         default: 'Manual sync dari admin'
 
-  # ── Trigger otomatis saat ada push ke main ────────────────────────────────
   push:
     branches: [ main ]
     paths:
       - '.github/workflows/sync_jadwal.yml'
+      - 'scripts/fetch_jadwal.py'
+      - 'scripts/generate_data_js.py'
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # perlu untuk commit ke repo
+      contents: write
 
     steps:
-      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. Install dependencies
       - name: Install dependencies
         run: pip install requests pandas openpyxl
 
-      # 4. Download + parse file dari SharePoint
-      - name: Download dan parse file jadwal
+      # Step 1: Download file dari SharePoint → data/jadwal.csv
+      - name: Download jadwal dari SharePoint
         run: python scripts/fetch_jadwal.py
         env:
           SHAREPOINT_URL: ${{ secrets.SHAREPOINT_URL }}
 
-      # 5. Commit file CSV hasil download (timpa yang lama)
-      - name: Commit data terbaru
+      # Step 2: Konversi CSV → docs/data.js untuk GitHub Pages
+      - name: Generate data.js untuk frontend
+        run: python scripts/generate_data_js.py
+
+      # Step 3: Commit semua hasil
+      - name: Commit hasil sync
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Force-add agar tidak diblokir .gitignore
-          git add -f data/jadwal.csv data/last_updated.txt
-          # Hanya commit kalau ada perubahan
+          git add -f data/jadwal.csv data/last_updated.txt docs/data.js
           git diff --staged --quiet || git commit -m "chore: sync jadwal $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push

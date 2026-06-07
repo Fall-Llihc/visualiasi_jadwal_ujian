@@ -55,7 +55,7 @@ function ScheduleCard({item, conflict}) {
   );
 }
 
-/* ── Conflict alert ── */
+/* ── Conflict alert: dua jadwal pengawasan pada sesi yang sama ── */
 function ConflictAlert({count}) {
   return (
     <div className="conflict-alert">
@@ -68,27 +68,36 @@ function ConflictAlert({count}) {
   );
 }
 
-/* ── External agenda card ── */
-function AgendaCard({ag}) {
+/* ── Conflict alert: agenda eksternal tabrakan dengan sesi pengawasan ── */
+function AgendaConflictAlert({agenda, sessionNums}) {
+  var slotLabels = sessionNums.map(function (s) { return SESSIONS[s] ? SESSIONS[s].time : ('Sesi ' + s); });
   return (
-    <div className="scard scard--agenda">
-      <div className="scard-top">
-        <span className="scard-time" style={{color:'#FFC1CC'}}><IconClock /> {ag.start} – {ag.end} WIB</span>
-        <span className="role-badge" style={{background:'rgba(255,193,204,0.18)', color:'#FFC1CC'}}>Eksternal</span>
+    <div className="conflict-alert">
+      <IconAlert />
+      <div>
+        <strong>Tabrakan Agenda Eksternal</strong>
+        <span> — “{agenda.title}” ({agenda.start}–{agenda.end}) bertabrakan dengan {slotLabels.join(', ')}.</span>
       </div>
-      <h3 className="scard-course">{ag.title}</h3>
     </div>
   );
 }
 
 /* ── Day section (collapsible) ── */
-function DaySection({date, items, allSchedule, agendas}) {
+function DaySection({date, items, allSchedule, dayAgendas}) {
   const [open, setOpen] = React.useState(true);
 
-  // count unique sessions with entries on this date
   var sessionNums = [...new Set(items.map(i => i.session))].sort();
-  var hasConflict = sessionNums.some(s => isSessionConflict(allSchedule, date, s));
-  var dayAgendas = agendas.filter(a => a.date === date);
+  var hasSchedConflict = sessionNums.some(s => isSessionConflict(allSchedule, date, s));
+
+  // Cek tiap agenda eksternal — apakah bertabrakan dengan sesi pengawasan di hari ini.
+  var agendaConflicts = dayAgendas
+    .map(function (ag) {
+      var conflictSessions = findAgendaSessionConflicts(allSchedule, ag);
+      return conflictSessions.length ? { agenda: ag, sessions: conflictSessions } : null;
+    })
+    .filter(Boolean);
+
+  var hasConflict = hasSchedConflict || agendaConflicts.length > 0;
 
   return (
     <div className={'day-section' + (hasConflict ? ' day-section--conflict' : '')}>
@@ -101,6 +110,12 @@ function DaySection({date, items, allSchedule, agendas}) {
 
       {open && (
         <div className="day-cards">
+          {/* Peringatan konflik agenda muncul di atas daftar sesi */}
+          {agendaConflicts.map(function (c) {
+            return <AgendaConflictAlert key={'ag-' + c.agenda.id} agenda={c.agenda} sessionNums={c.sessions} />;
+          })}
+
+          {/* Sesi pengawasan utama (agenda eksternal TIDAK ditampilkan di sini) */}
           {sessionNums.map(sn => {
             var sessItems = items.filter(i => i.session === sn);
             var conflict = sessItems.length > 1;
@@ -113,9 +128,6 @@ function DaySection({date, items, allSchedule, agendas}) {
               </div>
             );
           })}
-          {dayAgendas.map(ag => (
-            <AgendaCard key={ag.id} ag={ag} />
-          ))}
         </div>
       )}
     </div>
@@ -123,7 +135,7 @@ function DaySection({date, items, allSchedule, agendas}) {
 }
 
 /* ── Stats box ── */
-function StatBox({value, label, color, accent}) {
+function StatBox({value, label, color}) {
   return (
     <div className="stat-box">
       <p className="stat-value" style={{color: color || '#E4E4E4'}}>{value}</p>
@@ -137,16 +149,32 @@ function ScheduleView({proctor, agendas}) {
   var sch = proctor.schedule;
   var totalSesi = sch.length;
   var honor = totalSesi * HONOR_PER_SESSION;
-  var conflicts = countConflicts(sch);
-  var agendaCount = agendas.length;
+  var schedConflicts = countConflicts(sch);
 
-  // group by date, sorted
+  // Hitung jumlah agenda eksternal yang bertabrakan dengan sesi pengawasan
+  var agendaConflictCount = agendas.reduce(function (acc, ag) {
+    var c = findAgendaSessionConflicts(sch, ag);
+    return acc + (c.length > 0 ? 1 : 0);
+  }, 0);
+  var totalConflicts = schedConflicts + agendaConflictCount;
+
+  // Group sesi by date (hanya tanggal, abaikan komponen waktu) lalu sort.
   var dateMap = {};
-  sch.forEach(function(s) {
-    if (!dateMap[s.date]) dateMap[s.date] = [];
-    dateMap[s.date].push(s);
+  sch.forEach(function (s) {
+    var iso = isoDateOnly(s.date);
+    if (!dateMap[iso]) dateMap[iso] = [];
+    dateMap[iso].push(s);
   });
   var dates = Object.keys(dateMap).sort();
+
+  // Kelompokkan agenda eksternal per tanggal (untuk dilewatkan ke DaySection
+  // demi deteksi konflik — TIDAK akan dirender sebagai sesi).
+  var agendaMap = {};
+  agendas.forEach(function (a) {
+    var iso = isoDateOnly(a.date);
+    if (!agendaMap[iso]) agendaMap[iso] = [];
+    agendaMap[iso].push(a);
+  });
 
   return (
     <div className="main-view">
@@ -164,8 +192,8 @@ function ScheduleView({proctor, agendas}) {
       <div className="stats-row">
         <StatBox value={totalSesi} label="Total Sesi" color="#A8DADC" />
         <StatBox value={'Rp ' + honor.toLocaleString('id-ID')} label="Estimasi Honor" color="#FFC1CC" />
-        <StatBox value={agendaCount} label="Agenda Eksternal" />
-        <StatBox value={conflicts} label="Konflik Jadwal" color={conflicts > 0 ? '#e06060' : undefined} />
+        <StatBox value={agendas.length} label="Agenda Eksternal" />
+        <StatBox value={totalConflicts} label="Konflik Jadwal" color={totalConflicts > 0 ? '#e06060' : undefined} />
       </div>
 
       {/* Legend */}
@@ -181,7 +209,13 @@ function ScheduleView({proctor, agendas}) {
       {/* Schedule by day */}
       <div className="schedule-list">
         {dates.map(date => (
-          <DaySection key={date} date={date} items={dateMap[date]} allSchedule={sch} agendas={agendas} />
+          <DaySection
+            key={date}
+            date={date}
+            items={dateMap[date]}
+            allSchedule={sch}
+            dayAgendas={agendaMap[date] || []}
+          />
         ))}
       </div>
     </div>
@@ -193,7 +227,7 @@ function EmptyState() {
   return (
     <div className="empty-state">
       <div className="empty-icon"><IconCalendar /></div>
-      <h2>Selamat datang di Vis Jadwal</h2>
+      <h2>Selamat datang di ProctorView</h2>
       <p>Masukkan NIM di sidebar untuk melihat jadwal pengawasan UAS.</p>
     </div>
   );

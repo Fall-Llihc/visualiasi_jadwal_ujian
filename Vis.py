@@ -1,5 +1,5 @@
 """
-Vis.py — ProctorView Admin Console
+Vis.py — NgawasChill Admin Console
 Versi Streamlit ini hanya untuk admin: trigger sync, atur interval auto-refresh,
 preview data, dan reset cache. Versi user (lookup NIM + agenda) ada di
 GitHub Pages (folder docs/).
@@ -17,7 +17,7 @@ from datetime import datetime, timezone, timedelta
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ProctorView Admin — Jadwal Pengawas Ujian FIF",
+    page_title="NgawasChill Admin — Jadwal Pengawas Ujian FIF",
     page_icon="🛠",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -439,7 +439,7 @@ def trigger_github_actions(gh_token: str):
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
-            json={"ref": "main", "inputs": {"reason": "Manual trigger dari ProctorView Admin"}},
+            json={"ref": "main", "inputs": {"reason": "Manual trigger dari NgawasChill Admin"}},
             timeout=15,
         )
         if r.status_code == 204:
@@ -497,7 +497,7 @@ with st.sidebar:
     # Brand
     st.markdown(
         "<div class='sb-brand'>"
-        "<h1 class='sb-logo'>ProctorView</h1>"
+        "<h1 class='sb-logo'>NgawasChill</h1>"
         "<p class='sb-subtitle'>🛠 Admin Console</p>"
         "</div>",
         unsafe_allow_html=True,
@@ -725,7 +725,7 @@ if not st.session_state.admin_logged_in:
         "<div class='empty-state'>"
         "<svg width='52' height='52' viewBox='0 0 24 24' fill='none' stroke='#444' stroke-width='1.4' stroke-linecap='round'>"
         "<rect x='3' y='11' width='18' height='11' rx='2'/><path d='M7 11V7a5 5 0 0110 0v4'/></svg>"
-        "<h2>ProctorView Admin Console</h2>"
+        "<h2>NgawasChill Admin Console</h2>"
         "<p>Login melalui sidebar untuk mengelola sinkronisasi data, interval auto-refresh, dan reset cache.</p>"
         "<p style='margin-top:12px;font-size:12px;color:#555;'>Versi user (lookup NIM &amp; agenda) tersedia di GitHub Pages.</p>"
         "</div>",

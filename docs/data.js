@@ -142,7 +142,71 @@
     return conflicts;
   };
 
-  window.LAST_UPDATE_RAW   = '2026-06-07 17:12:42';
+  // Hitung breakdown honor dengan memperhitungkan konflik:
+  //  - Internal conflict: 2+ jadwal di slot (date,session) yang sama → pengawas
+  //    cuma bisa hadir 1, sisanya hangus (lost = N - 1)
+  //  - Agenda eksternal yg overlap waktu dengan suatu slot → pengawas tidak bisa
+  //    hadir di slot itu sama sekali, jadi semua N entry slot itu hangus.
+  window.computeHonorBreakdown = function (schedule, agendas) {
+    var slots = {};
+    schedule.forEach(function (s) {
+      var k = isoDateOnly(s.date) + '-' + s.session;
+      if (!slots[k]) slots[k] = { date: isoDateOnly(s.date), session: s.session, entries: [] };
+      slots[k].entries.push(s);
+    });
+
+    var attended = 0;
+    var lostInternal = 0;
+    var lostAgenda   = 0;
+    var conflictSlots = 0;
+    var agendaList = Array.isArray(agendas) ? agendas : [];
+
+    Object.keys(slots).forEach(function (k) {
+      var slot = slots[k];
+      var n = slot.entries.length;
+
+      var hasAgendaConflict = false;
+      for (var i = 0; i < agendaList.length; i++) {
+        var ag = agendaList[i];
+        if (isoDateOnly(ag.date) !== slot.date) continue;
+        var range = window.SESSION_TIME_RANGES[slot.session];
+        if (!range) continue;
+        if (window.timeOverlap(ag.start, ag.end, range[0], range[1])) {
+          hasAgendaConflict = true;
+          break;
+        }
+      }
+
+      if (hasAgendaConflict) {
+        // Tidak bisa hadir di slot ini sama sekali
+        lostAgenda += n;
+      } else if (n > 1) {
+        // Internal conflict: hadir 1, sisanya hangus
+        attended      += 1;
+        lostInternal  += n - 1;
+        conflictSlots += 1;
+      } else {
+        attended += 1;
+      }
+    });
+
+    var total = schedule.length;
+    var lostTotal = lostInternal + lostAgenda;
+    var perSesi = window.HONOR_PER_SESSION;
+    return {
+      total:           total,
+      attended:        attended,
+      lostInternal:    lostInternal,
+      lostAgenda:      lostAgenda,
+      lostTotal:       lostTotal,
+      conflictSlots:   conflictSlots,
+      honorGross:      total    * perSesi,
+      honorNet:        attended * perSesi,
+      honorLost:       lostTotal * perSesi,
+    };
+  };
+
+  window.LAST_UPDATE_RAW   = '2026-06-07 16:53:23';
   window.GITHUB_REPO       = 'Fall-Llihc/visualiasi_jadwal_ujian';
   window.DATA_ROWS         = 405;
   window.DATA_PROCTORS     = 32;

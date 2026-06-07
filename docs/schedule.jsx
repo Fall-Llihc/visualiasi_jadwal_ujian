@@ -164,11 +164,14 @@ function DaySection({date, items, allSchedule, dayAgendas}) {
 }
 
 /* ── Stats box ── */
-function StatBox({value, label, color}) {
+function StatBox({value, label, color, note, noteColor, title}) {
   return (
-    <div className="stat-box">
+    <div className="stat-box" title={title || undefined}>
       <p className="stat-value" style={{color: color || '#E4E4E4'}}>{value}</p>
       <p className="stat-label">{label}</p>
+      {note && (
+        <p className="stat-note" style={{color: noteColor || '#e06060'}}>{note}</p>
+      )}
     </div>
   );
 }
@@ -177,8 +180,12 @@ function StatBox({value, label, color}) {
 function ScheduleView({proctor, agendas}) {
   var sch = proctor.schedule;
   var totalSesi = sch.length;
-  var honor = totalSesi * HONOR_PER_SESSION;
   var schedConflicts = countConflicts(sch);
+
+  // Breakdown honor: hadir vs hangus karena konflik (internal & agenda eksternal)
+  var hb = computeHonorBreakdown(sch, agendas);
+  var honorNet  = hb.honorNet;
+  var honorLost = hb.honorLost;
 
   // Hitung jumlah agenda eksternal yang bertabrakan dengan sesi pengawasan
   var agendaConflictCount = agendas.reduce(function (acc, ag) {
@@ -205,6 +212,22 @@ function ScheduleView({proctor, agendas}) {
     agendaMap[iso].push(a);
   });
 
+  // Susun teks untuk badge honor
+  var honorLabel = honorLost > 0 ? 'Honor Bersih' : 'Estimasi Honor';
+  var honorNote  = null;
+  var honorTitle = null;
+  if (honorLost > 0) {
+    var parts = [];
+    if (hb.lostInternal > 0) parts.push(hb.lostInternal + ' internal');
+    if (hb.lostAgenda   > 0) parts.push(hb.lostAgenda   + ' agenda');
+    honorNote  = '−Rp ' + honorLost.toLocaleString('id-ID') + ' · ' + hb.lostTotal + ' sesi hangus';
+    honorTitle = 'Honor kotor: Rp ' + hb.honorGross.toLocaleString('id-ID')
+               + '\nSesi hadir: ' + hb.attended + ' / ' + hb.total
+               + '\nSesi hangus: ' + hb.lostTotal + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+  } else {
+    honorTitle = hb.total + ' sesi × Rp ' + HONOR_PER_SESSION.toLocaleString('id-ID');
+  }
+
   return (
     <div className="main-view">
       {/* Header */}
@@ -219,11 +242,32 @@ function ScheduleView({proctor, agendas}) {
 
       {/* Stats */}
       <div className="stats-row">
-        <StatBox value={totalSesi} label="Total Sesi" color="#A8DADC" />
-        <StatBox value={'Rp ' + honor.toLocaleString('id-ID')} label="Estimasi Honor" color="#FFC1CC" />
+        <StatBox value={totalSesi} label="Total Sesi" color="#A8DADC"
+                 note={hb.lostTotal > 0 ? '✓ ' + hb.attended + ' hadir' : null}
+                 noteColor="#6BCB77" />
+        <StatBox value={'Rp ' + honorNet.toLocaleString('id-ID')} label={honorLabel}
+                 color="#FFC1CC" note={honorNote} title={honorTitle} />
         <StatBox value={agendas.length} label="Agenda Eksternal" />
-        <StatBox value={totalConflicts} label="Konflik Jadwal" color={totalConflicts > 0 ? '#e06060' : undefined} />
+        <StatBox value={totalConflicts} label="Konflik Jadwal"
+                 color={totalConflicts > 0 ? '#e06060' : undefined} />
       </div>
+
+      {/* Honor breakdown alert (hanya muncul kalau ada pengurangan) */}
+      {honorLost > 0 && (
+        <div className="honor-alert">
+          <IconAlert />
+          <div className="honor-alert-body">
+            <strong>Pengurangan Honor</strong>
+            <span>
+              {' '}— {hb.lostTotal} sesi tidak bisa dihadiri ({hb.lostInternal > 0 ? hb.lostInternal + ' karena tabrakan internal' : ''}
+              {hb.lostInternal > 0 && hb.lostAgenda > 0 ? ', ' : ''}
+              {hb.lostAgenda   > 0 ? hb.lostAgenda + ' karena agenda eksternal' : ''}
+              ), honor berkurang <b>Rp {honorLost.toLocaleString('id-ID')}</b>{' '}
+              dari kotor Rp {hb.honorGross.toLocaleString('id-ID')}.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="legend-row">

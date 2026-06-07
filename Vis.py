@@ -413,9 +413,14 @@ for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# Safety net: pastikan key auto_update_enabled selalu ada — bila session state
+# berasal dari deploy versi lama, init loop di atas mungkin tidak meng-cover
+# key baru ini sehingga `st.session_state.auto_update_enabled` bisa AttributeError.
+st.session_state.setdefault("auto_update_enabled", True)
+
 # Auto-refresh check (non-blocking) — hanya jalan kalau toggle Auto-Update aktif
 _now = time.time()
-if (st.session_state.auto_update_enabled and
+if (st.session_state.get("auto_update_enabled", True) and
     st.session_state.df is not None and
     (_now - st.session_state.last_auto_fetch) >= st.session_state.interval_min * 60):
     _load_from_github.clear()
@@ -525,7 +530,7 @@ with st.sidebar:
             "(termasuk auto-trigger ke GitHub Actions tetap manual).</p>",
             unsafe_allow_html=True,
         )
-        prev_auto = st.session_state.auto_update_enabled
+        prev_auto = st.session_state.get("auto_update_enabled", True)
         st.session_state.auto_update_enabled = st.toggle(
             "Auto-update aktif",
             value=prev_auto,
@@ -535,7 +540,7 @@ with st.sidebar:
         if (not prev_auto) and st.session_state.auto_update_enabled:
             st.session_state.last_auto_fetch = time.time()
 
-        if st.session_state.auto_update_enabled:
+        if st.session_state.get("auto_update_enabled", True):
             st.markdown(
                 "<p style='font-size:11px;color:#6BCB77;text-align:center;margin-top:4px;'>"
                 "🟢 Auto-pull aktif — refresh tiap "
@@ -716,8 +721,9 @@ if df_now is not None:
 elapsed = time.time() - st.session_state.last_auto_fetch
 remain  = max(0, st.session_state.interval_min * 60 - elapsed)
 rm, rs  = int(remain // 60), int(remain % 60)
-auto_label = f"{rm}m {rs}s" if st.session_state.auto_update_enabled else "Nonaktif"
-auto_color = '#A8DADC' if st.session_state.auto_update_enabled else '#e06060'
+_auto_on = st.session_state.get("auto_update_enabled", True)
+auto_label = f"{rm}m {rs}s" if _auto_on else "Nonaktif"
+auto_color = '#A8DADC' if _auto_on else '#e06060'
 
 st.markdown(
     f"<div class='stats-row'>"

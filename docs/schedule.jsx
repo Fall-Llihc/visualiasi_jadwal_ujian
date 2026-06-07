@@ -31,26 +31,41 @@ function RoleBadge({role}) {
 function ScheduleCard({item, conflict}) {
   var ses = SESSIONS[item.session];
   var borderColor = conflict ? '#e06060' : ses.color;
-  // Section info hanya muncul kalau kelas-nya benar-benar dipecah
-  // ke >1 ruangan pada (tanggal, jam, MK, kelas) yang sama.
+
+  // Section badge — selalu ditampilkan di bawah badge P1/P2.
+  // - Bila kelas dipecah jadi 2 ruangan: 'Atas' (section 1) / 'Bawah' (section 2)
+  // - Bila kelas dipecah ke >2 ruangan: 'Section X/N' (fallback informatif)
+  // - Bila kelas tidak dipecah (cuma 1 ruangan): '(1 Ruangan)'
   var sec = item.section;
-  var posLabel = '';
-  if (sec && sec.total === 2) posLabel = sec.index === 1 ? '(Atas)' : '(Bawah)';
+  var sectionText, sectionTitle;
+  if (!sec || !sec.total || sec.total <= 1) {
+    sectionText = '(1 Ruangan)';
+    sectionTitle = 'Kelas tidak dipecah ke ruangan lain';
+  } else if (sec.total === 2) {
+    sectionText = sec.index === 1 ? 'Atas' : 'Bawah';
+    sectionTitle = 'Kelas dipecah ke ' + sec.rooms.join(' & ');
+  } else {
+    sectionText = 'Section ' + sec.index + '/' + sec.total;
+    sectionTitle = 'Kelas dipecah ke ' + sec.rooms.join(', ');
+  }
+  // Warna badge: pakai warna pink untuk split, abu untuk non-split.
+  var sectionStyle = (sec && sec.total > 1)
+    ? { background: 'rgba(255,193,204,0.18)', color: '#FFC1CC' }
+    : { background: 'rgba(120,120,120,0.18)', color: '#999' };
+
   return (
     <div className="scard" style={{borderLeftColor: borderColor}}>
       <div className="scard-top">
         <span className="scard-time" style={{color: ses.color}}>
           <IconClock /> {ses.time}
         </span>
-        <RoleBadge role={item.role} />
-      </div>
-      {sec && (
-        <div className="scard-section" title={'Kelas dipecah ke: ' + sec.rooms.join(', ')}>
-          <span className="section-badge">Section {sec.index} dari {sec.total}</span>
-          {posLabel && <span className="section-pos">{posLabel}</span>}
-          <span className="section-rooms">· kelas dipecah ke {sec.rooms.length} ruangan</span>
+        <div className="scard-badges">
+          <RoleBadge role={item.role} />
+          <span className="role-badge section-badge" style={sectionStyle} title={sectionTitle}>
+            {sectionText}
+          </span>
         </div>
-      )}
+      </div>
       <h3 className="scard-course">{item.course}</h3>
       <p className="scard-room"><IconPin /> {item.code}</p>
       <div className="scard-meta">

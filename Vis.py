@@ -408,7 +408,6 @@ _DEFAULTS = {
     "last_auto_fetch": 0.0,
     "last_updated_str": "",
     "show_reset_confirm": False,
-    "auto_update_enabled": True,
 }
 for k, v in _DEFAULTS.items():
     if k not in st.session_state:

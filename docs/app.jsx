@@ -1,6 +1,16 @@
 /* app.jsx — Root App component (read-only user view) */
 const { useState, useEffect, useCallback } = React;
 
+/* ── icon: hamburger ── */
+const SvgMenu = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+);
+
+/* Helper: cek apakah viewport mobile (≤860px) */
+function isMobileViewport() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 860px)').matches;
+}
+
 function App() {
   const [nim, setNim] = useState('');
   const [searchError, setSearchError] = useState('');
@@ -10,6 +20,32 @@ function App() {
     try { return JSON.parse(localStorage.getItem('vj_agendas') || '[]'); }
     catch { return []; }
   });
+
+  // Sidebar visibility — default: terbuka di desktop, tertutup di mobile
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobileViewport());
+  const [isMobile, setIsMobile] = useState(() => isMobileViewport());
+
+  // Sinkronkan state saat ukuran viewport berubah (rotate / resize)
+  useEffect(() => {
+    function handleResize() {
+      const mobile = isMobileViewport();
+      setIsMobile(mobile);
+      // Saat user resize ke desktop, otomatis buka sidebar.
+      // Saat resize ke mobile, otomatis tutup supaya tidak menutupi konten.
+      setSidebarOpen(!mobile);
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Tutup sidebar otomatis di mobile saat user menekan Esc
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape' && isMobile && sidebarOpen) setSidebarOpen(false);
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isMobile, sidebarOpen]);
 
   // persist agendas
   useEffect(() => {
@@ -44,13 +80,20 @@ function App() {
     if (!p) { setSearchError('NIM ' + v + ' tidak ditemukan.'); return; }
     setProctor(p);
     localStorage.setItem('vj_last_nim', v);
-  }, [nim]);
+    // Auto-tutup sidebar di mobile setelah pencarian sukses
+    if (isMobile) setSidebarOpen(false);
+  }, [nim, isMobile]);
 
   function addAgenda(ag) { setAgendas(prev => [...prev, ag]); }
   function removeAgenda(id) { setAgendas(prev => prev.filter(a => a.id !== id)); }
 
   return (
     <div className="app-layout">
+      {/* Backdrop hanya muncul di mobile saat sidebar terbuka */}
+      {isMobile && sidebarOpen && (
+        <div className="sb-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+
       <Sidebar
         nimValue={nim}
         onNimChange={v => { setNim(v); setSearchError(''); }}
@@ -61,8 +104,23 @@ function App() {
         onRemoveAgenda={removeAgenda}
         lastUpdate={lastUpdate}
         dataRows={window.DATA_ROWS || 0}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
-      <main className="main-content">
+
+      {/* Hamburger button — muncul saat sidebar tertutup */}
+      {!sidebarOpen && (
+        <button
+          className="sb-open-btn"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Buka sidebar"
+          title="Buka sidebar"
+        >
+          <SvgMenu />
+        </button>
+      )}
+
+      <main className={'main-content' + (sidebarOpen && !isMobile ? '' : ' main-content--full')}>
         {proctor ? <ScheduleView proctor={proctor} agendas={agendas} /> : <EmptyState />}
       </main>
     </div>

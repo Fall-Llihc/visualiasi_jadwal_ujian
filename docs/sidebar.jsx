@@ -35,7 +35,7 @@ function Sidebar(props) {
     <aside className="sidebar">
       {/* Brand */}
       <div className="sb-brand">
-        <h1 className="sb-logo">ProctorView</h1>
+        <h1 className="sb-logo">NgawasChill</h1>
         <p className="sb-subtitle">Jadwal Pengawas Ujian FIF</p>
       </div>
 

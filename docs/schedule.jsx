@@ -319,7 +319,7 @@ function EmptyState() {
   return (
     <div className="empty-state">
       <div className="empty-icon"><IconCalendar /></div>
-      <h2>Selamat datang di ProctorView</h2>
+      <h2>Selamat datang di NgawasChill</h2>
       <p>Masukkan NIM di sidebar untuk melihat jadwal pengawasan UAS.</p>
     </div>
   );

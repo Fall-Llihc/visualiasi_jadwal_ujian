@@ -69,7 +69,10 @@ function ScheduleCard({item, conflict}) {
       <h3 className="scard-course">{item.course}</h3>
       <p className="scard-room"><IconPin /> {item.code}</p>
       <div className="scard-meta">
-        <span className="scard-meta-item">{item.kelas}</span>
+        <span className={'scard-meta-item' + (item.intl ? ' scard-meta-item--intl' : '')}
+              title={item.intl ? 'Kelas Internasional — honor 2× (Rp ' + (HONOR_PER_SESSION * 2).toLocaleString('id-ID') + '/sesi)' : undefined}>
+          {item.kelas}{item.intl ? ' · 2×' : ''}
+        </span>
         <span className="scard-meta-sep">·</span>
         <span className="scard-meta-item">{item.type}</span>
       </div>
@@ -224,8 +227,25 @@ function ScheduleView({proctor, agendas}) {
     honorTitle = 'Honor kotor: Rp ' + hb.honorGross.toLocaleString('id-ID')
                + '\nSesi hadir: ' + hb.attended + ' / ' + hb.total
                + '\nSesi hangus: ' + hb.lostTotal + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+    if (hb.intlAttended > 0) {
+      honorTitle += '\nKelas INT (×2): ' + hb.intlAttended + ' / ' + hb.intlTotal;
+    }
   } else {
-    honorTitle = hb.total + ' sesi × Rp ' + HONOR_PER_SESSION.toLocaleString('id-ID');
+    if (hb.intlTotal > 0) {
+      honorTitle = hb.total + ' sesi (' + hb.intlTotal + ' kelas INT ×2)';
+    } else {
+      honorTitle = hb.total + ' sesi × Rp ' + HONOR_PER_SESSION.toLocaleString('id-ID');
+    }
+  }
+
+  // Note kecil di bawah stat "Total Sesi" — kasih hint kelas INT bila ada
+  var totalNote = null, totalNoteColor = null;
+  if (hb.lostTotal > 0) {
+    totalNote = '✓ ' + hb.attended + ' hadir';
+    totalNoteColor = '#6BCB77';
+  } else if (hb.intlTotal > 0) {
+    totalNote = hb.intlTotal + ' kelas INT ×2';
+    totalNoteColor = '#FFD580';
   }
 
   return (
@@ -243,8 +263,7 @@ function ScheduleView({proctor, agendas}) {
       {/* Stats */}
       <div className="stats-row">
         <StatBox value={totalSesi} label="Total Sesi" color="#A8DADC"
-                 note={hb.lostTotal > 0 ? '✓ ' + hb.attended + ' hadir' : null}
-                 noteColor="#6BCB77" />
+                 note={totalNote} noteColor={totalNoteColor} />
         <StatBox value={'Rp ' + honorNet.toLocaleString('id-ID')} label={honorLabel}
                  color="#FFC1CC" note={honorNote} title={honorTitle} />
         <StatBox value={agendas.length} label="Agenda Eksternal" />

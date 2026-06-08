@@ -38,6 +38,31 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Fallback untuk browser yang belum support 100dvh — set --app-vh ke
+  // window.innerHeight aktual (sudah memperhitungkan address bar mobile).
+  // CSS sudah pakai progressive enhancement: 100vh → var(--app-vh) → 100dvh.
+  useEffect(() => {
+    function setAppVh() {
+      document.documentElement.style.setProperty(
+        '--app-vh', window.innerHeight + 'px'
+      );
+    }
+    setAppVh();
+    window.addEventListener('resize', setAppVh);
+    window.addEventListener('orientationchange', setAppVh);
+    // visualViewport mendeteksi saat address bar mobile collapse/expand
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', setAppVh);
+    }
+    return () => {
+      window.removeEventListener('resize', setAppVh);
+      window.removeEventListener('orientationchange', setAppVh);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', setAppVh);
+      }
+    };
+  }, []);
+
   // Tutup sidebar otomatis di mobile saat user menekan Esc
   useEffect(() => {
     function handleKey(e) {

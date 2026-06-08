@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>NgawasChill — Jadwal Pengawas Ujian FIF</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
   <style>
@@ -13,15 +13,31 @@
       --border:#444; --danger:#e06060; --success:#6BCB77;
     }
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;overflow:hidden}
+    body{
+      font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+      background:var(--bg);color:var(--text);
+      display:flex;overflow:hidden;
+      min-height:100vh;
+      min-height:var(--app-vh,100vh);
+      min-height:100dvh;
+    }
     ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
     /* ── layout ── */
     html,body{width:100%;height:100%}
-    .app-layout{position:relative;width:100vw;height:100vh;overflow:hidden}
+    .app-layout{
+      position:relative;width:100vw;
+      height:100vh;
+      height:var(--app-vh,100vh);
+      height:100dvh;
+      overflow:hidden;
+    }
     .sidebar{
       position:fixed;top:0;left:0;
-      width:280px;height:100vh;
+      width:280px;
+      height:100vh;
+      height:var(--app-vh,100vh);
+      height:100dvh;
       background:var(--bg-sidebar);
       display:flex;flex-direction:column;
       border-right:1px solid var(--border);
@@ -32,8 +48,12 @@
     }
     .sidebar--closed{transform:translateX(-100%)}
     .main-content{
-      width:calc(100% - 280px);height:100vh;
+      width:calc(100% - 280px);
+      height:100vh;
+      height:var(--app-vh,100vh);
+      height:100dvh;
       overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
       padding:32px 36px 60px;
       margin-left:280px;
       transition:margin-left .25s ease,width .25s ease;
@@ -240,7 +260,7 @@
       .sidebar{width:min(85vw,300px)}
       .main-content{
         margin-left:0 !important;
-        padding:64px 16px 40px;
+        padding:64px 16px calc(40px + env(safe-area-inset-bottom,0px));
       }
       .stats-row{grid-template-columns:repeat(2,1fr);gap:8px}
       .stat-box{padding:14px 10px}
@@ -265,7 +285,7 @@
       .empty-state p{font-size:13px}
     }
     @media(max-width:480px){
-      .main-content{padding:60px 12px 32px}
+      .main-content{padding:60px 12px calc(32px + env(safe-area-inset-bottom,0px))}
       .stats-row{grid-template-columns:1fr 1fr;gap:6px}
       .mv-name{font-size:20px}
       .mv-badges{gap:6px}
